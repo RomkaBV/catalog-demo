@@ -82,3 +82,17 @@ button, input, select, textarea { font: inherit; }
 .photo-file{font-size:11px;background:#f1f4f8;border-radius:999px;padding:5px 8px;color:#566070}
 .source-name{font-size:12px;color:var(--muted);margin-top:-3px}
 @media(max-width:760px){.summary-prices{grid-template-columns:1fr}.excel-table th{width:42%}}
+
+
+/* Google Drive photo gallery */
+.card-image .image-fallback a{color:var(--accent);text-decoration:none;margin-top:6px;display:inline-block}
+.photo-source-note{font-size:12px;color:var(--muted);font-weight:700;margin-top:9px}
+.drive-thumb{position:relative;flex:0 0 76px;width:76px;height:62px;padding:0;border:2px solid transparent;border-radius:10px;overflow:hidden;background:#eef2f7;cursor:pointer}
+.drive-thumb:hover{border-color:var(--accent)}
+.drive-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.drive-thumb span{position:absolute;right:4px;bottom:4px;min-width:20px;height:20px;padding:0 5px;border-radius:999px;background:rgba(15,23,42,.78);color:#fff;font-size:11px;line-height:20px;text-align:center}
+.drive-thumb.thumb-error img{display:none}
+.drive-thumb.thumb-error:before{content:'Drive';display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:11px;color:var(--muted);font-weight:800}
+.photo-file-link{text-decoration:none;border:1px solid var(--line)}
+.photo-file-link:hover{color:var(--accent);border-color:#b9d2fb;background:#f7faff}
+.detail-main-image.image-fallback a{color:var(--accent);text-decoration:none}
