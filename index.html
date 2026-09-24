@@ -3,32 +3,29 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Каталог майна — Чернігів</title>
+  <title>Каталог майна — Demo</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header class="topbar">
     <div>
-      <div class="eyebrow">КАТАЛОГ МАЙНА</div>
+      <div class="eyebrow">DEMO CATALOG</div>
       <h1>Продаж майна та обладнання</h1>
-      <p>Дані завантажені з Excel · 252 позиції</p>
+      <p>Дані з Excel · 252 позиції</p>
     </div>
-    <div class="top-actions">
-      <a class="btn light" href="data/catalog.xlsx" download>↓ Excel</a>
-      <button id="openAdminBtn" class="btn primary">+ Додати позицію</button>
-    </div>
+    <button id="openAdminBtn" class="btn primary">+ Додати позицію</button>
   </header>
 
   <main class="container">
     <section class="toolbar">
-      <input id="searchInput" type="search" placeholder="Пошук за назвою, інв. № або локацією…" />
+      <input id="searchInput" type="search" placeholder="Пошук за назвою, інв. №, описом або локацією…" />
       <select id="categoryFilter">
         <option value="all">Усі категорії</option>
       </select>
       <select id="statusFilter">
         <option value="all">Усі статуси</option>
       </select>
-      <button id="resetDemoBtn" class="btn ghost">Відновити дані Excel</button>
+      <button id="resetDemoBtn" class="btn ghost">Відновити Excel</button>
     </section>
 
     <section id="stats" class="stats"></section>
@@ -67,7 +64,12 @@
           </select>
         </label>
         <label>Статус
-          <input id="status" value="Не подано" />
+          <select id="status">
+            <option>Не подано</option>
+            <option>В продажу</option>
+            <option>Заброньовано</option>
+            <option>Продано</option>
+          </select>
         </label>
       </div>
 
@@ -92,7 +94,6 @@
     <div id="detailContent"></div>
   </dialog>
 
-  <script src="catalog-data.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
