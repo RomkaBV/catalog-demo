@@ -3,32 +3,32 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Каталог майна — Demo</title>
+  <title>Каталог майна — Чернігів</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header class="topbar">
     <div>
-      <div class="eyebrow">DEMO CATALOG</div>
+      <div class="eyebrow">КАТАЛОГ МАЙНА</div>
       <h1>Продаж майна та обладнання</h1>
-      <p>Демо-версія для GitHub Pages</p>
+      <p>Дані завантажені з Excel · 252 позиції</p>
     </div>
-    <button id="openAdminBtn" class="btn primary">+ Додати позицію</button>
+    <div class="top-actions">
+      <a class="btn light" href="data/catalog.xlsx" download>↓ Excel</a>
+      <button id="openAdminBtn" class="btn primary">+ Додати позицію</button>
+    </div>
   </header>
 
   <main class="container">
     <section class="toolbar">
-      <input id="searchInput" type="search" placeholder="Пошук за назвою або описом…" />
+      <input id="searchInput" type="search" placeholder="Пошук за назвою, інв. № або локацією…" />
       <select id="categoryFilter">
         <option value="all">Усі категорії</option>
       </select>
       <select id="statusFilter">
         <option value="all">Усі статуси</option>
-        <option value="В продажу">В продажу</option>
-        <option value="Заброньовано">Заброньовано</option>
-        <option value="Продано">Продано</option>
       </select>
-      <button id="resetDemoBtn" class="btn ghost">Скинути демо</button>
+      <button id="resetDemoBtn" class="btn ghost">Відновити дані Excel</button>
     </section>
 
     <section id="stats" class="stats"></section>
@@ -54,7 +54,7 @@
           <input id="category" required placeholder="Холодильне обладнання" />
         </label>
         <label>Ціна, грн
-          <input id="price" type="number" min="0" step="1" required placeholder="8500" />
+          <input id="price" type="number" min="0" step="1" placeholder="8500" />
         </label>
         <label>Локація
           <input id="location" placeholder="Чернігів" />
@@ -67,11 +67,7 @@
           </select>
         </label>
         <label>Статус
-          <select id="status">
-            <option>В продажу</option>
-            <option>Заброньовано</option>
-            <option>Продано</option>
-          </select>
+          <input id="status" value="Не подано" />
         </label>
       </div>
 
@@ -81,7 +77,7 @@
 
       <label>Фото
         <input id="photos" type="file" accept="image/*" multiple />
-        <small>Для GitHub Pages у демо фото зберігаються локально у браузері. Рекомендовано до 3 невеликих фото.</small>
+        <small>Фото, додані через форму, зберігаються локально у браузері цього пристрою.</small>
       </label>
       <div id="photoPreview" class="photo-preview"></div>
 
@@ -96,6 +92,7 @@
     <div id="detailContent"></div>
   </dialog>
 
+  <script src="catalog-data.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
