@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Каталог майна — Demo</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">DEMO CATALOG</div>
+      <h1>Продаж майна та обладнання</h1>
+      <p>Демо-версія для GitHub Pages</p>
+    </div>
+    <button id="openAdminBtn" class="btn primary">+ Додати позицію</button>
+  </header>
+
+  <main class="container">
+    <section class="toolbar">
+      <input id="searchInput" type="search" placeholder="Пошук за назвою або описом…" />
+      <select id="categoryFilter">
+        <option value="all">Усі категорії</option>
+      </select>
+      <select id="statusFilter">
+        <option value="all">Усі статуси</option>
+        <option value="В продажу">В продажу</option>
+        <option value="Заброньовано">Заброньовано</option>
+        <option value="Продано">Продано</option>
+      </select>
+      <button id="resetDemoBtn" class="btn ghost">Скинути демо</button>
+    </section>
+
+    <section id="stats" class="stats"></section>
+    <section id="catalog" class="catalog"></section>
+    <div id="emptyState" class="empty hidden">Нічого не знайдено.</div>
+  </main>
+
+  <dialog id="adminDialog" class="dialog">
+    <form id="productForm" method="dialog" class="form-card">
+      <div class="dialog-head">
+        <div>
+          <div class="eyebrow">АДМІНКА</div>
+          <h2>Додати позицію</h2>
+        </div>
+        <button type="button" id="closeAdminBtn" class="icon-btn">✕</button>
+      </div>
+
+      <div class="grid2">
+        <label>Назва
+          <input id="name" required placeholder="Напр. Морозильна скриня" />
+        </label>
+        <label>Категорія
+          <input id="category" required placeholder="Холодильне обладнання" />
+        </label>
+        <label>Ціна, грн
+          <input id="price" type="number" min="0" step="1" required placeholder="8500" />
+        </label>
+        <label>Локація
+          <input id="location" placeholder="Чернігів" />
+        </label>
+        <label>Стан
+          <select id="condition">
+            <option>Б/У</option>
+            <option>Нове</option>
+            <option>Потребує ремонту</option>
+          </select>
+        </label>
+        <label>Статус
+          <select id="status">
+            <option>В продажу</option>
+            <option>Заброньовано</option>
+            <option>Продано</option>
+          </select>
+        </label>
+      </div>
+
+      <label>Опис
+        <textarea id="description" rows="4" placeholder="Короткий опис, розміри, характеристики…"></textarea>
+      </label>
+
+      <label>Фото
+        <input id="photos" type="file" accept="image/*" multiple />
+        <small>Для GitHub Pages у демо фото зберігаються локально у браузері. Рекомендовано до 3 невеликих фото.</small>
+      </label>
+      <div id="photoPreview" class="photo-preview"></div>
+
+      <div class="form-actions">
+        <button type="button" id="cancelBtn" class="btn ghost">Скасувати</button>
+        <button type="submit" class="btn primary">Зберегти</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="detailDialog" class="dialog detail-dialog">
+    <div id="detailContent"></div>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
