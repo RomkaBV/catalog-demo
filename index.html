@@ -1,99 +1,145 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="uk">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Каталог майна — Demo</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Інформаційний каталог БУ обладнання та майна" />
+  <title>БУ обладнання та майно</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header class="topbar">
-    <div>
-      <div class="eyebrow">DEMO CATALOG</div>
-      <h1>Продаж майна та обладнання</h1>
-      <p>Дані з Excel · 252 позиції</p>
-    </div>
-    <button id="openAdminBtn" class="btn primary">+ Додати позицію</button>
+    <a class="brand" href="#top" aria-label="На головну">
+      <span class="brand-mark">БУ</span>
+      <span><strong>КАТАЛОГ</strong><small>обладнання та майно</small></span>
+    </a>
+    <nav class="nav">
+      <a href="#catalog">Каталог</a>
+      <a href="#about">Про сайт</a>
+      <button class="link-button" id="adminEntry" type="button">Адміністратор</button>
+    </nav>
   </header>
 
-  <main class="container">
-    <section class="toolbar">
-      <input id="searchInput" type="search" placeholder="Пошук за назвою, інв. №, описом або локацією…" />
-      <select id="categoryFilter">
-        <option value="all">Усі категорії</option>
-      </select>
-      <select id="statusFilter">
-        <option value="all">Усі статуси</option>
-      </select>
-      <button id="resetDemoBtn" class="btn ghost">Відновити Excel</button>
+  <main id="top">
+    <section class="hero">
+      <div class="hero-overlay"></div>
+      <div class="hero-content">
+        <span class="eyebrow">ІНФОРМАЦІЙНИЙ КАТАЛОГ</span>
+        <h1>БУ ОБЛАДНАННЯ ТА МАЙНО</h1>
+        <p id="heroSubtitle">Каталог доступного обладнання з фото, кількістю та артикулом</p>
+        <div class="searchbox">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 21-4.35-4.35m2.35-5.65a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"/></svg>
+          <input id="searchInput" type="search" placeholder="Пошук за назвою або артикулом" autocomplete="off" />
+          <button id="searchBtn" type="button">Знайти</button>
+        </div>
+        <div class="hero-stats">
+          <div><strong id="statProducts">—</strong><span>позицій</span></div>
+          <div><strong id="statWithPhotos">—</strong><span>з фото</span></div>
+          <div><strong id="statQuantity">—</strong><span>одиниць</span></div>
+        </div>
+      </div>
     </section>
 
-    <section id="stats" class="stats"></section>
-    <section id="catalog" class="catalog"></section>
-    <div id="emptyState" class="empty hidden">Нічого не знайдено.</div>
+    <section class="catalog-section" id="catalog">
+      <div class="section-head">
+        <div>
+          <span class="section-kicker">КАТАЛОГ</span>
+          <h2>Доступне обладнання</h2>
+          <p id="resultText">Завантаження каталогу…</p>
+        </div>
+        <div class="toolbar">
+          <select id="sortSelect" aria-label="Сортування">
+            <option value="name">За назвою</option>
+            <option value="article">За артикулом</option>
+            <option value="qtyDesc">Кількість: більше</option>
+            <option value="photos">Спочатку з фото</option>
+          </select>
+          <button id="addProductBtn" class="primary hidden" type="button">+ Додати позицію</button>
+        </div>
+      </div>
+
+      <div id="categoryChips" class="chips" aria-label="Категорії"></div>
+      <div id="catalogGrid" class="grid"></div>
+      <div class="loadmore-wrap"><button id="loadMoreBtn" class="secondary" type="button">Показати ще</button></div>
+    </section>
+
+    <section class="about" id="about">
+      <div>
+        <span class="section-kicker">ПРО САЙТ</span>
+        <h2>Фото показуються прямо в каталозі</h2>
+      </div>
+      <p>Фотографії зберігаються у Google Drive та відображаються на сайті без необхідності відкривати Google Drive. Якщо фото ще немає, позиція залишається в каталозі й показує нейтральну заглушку.</p>
+    </section>
   </main>
 
-  <dialog id="adminDialog" class="dialog">
-    <form id="productForm" method="dialog" class="form-card">
-      <div class="dialog-head">
-        <div>
-          <div class="eyebrow">АДМІНКА</div>
-          <h2>Додати позицію</h2>
-        </div>
-        <button type="button" id="closeAdminBtn" class="icon-btn">✕</button>
+  <footer>
+    <div><strong>БУ обладнання та майно</strong><span id="contactText"></span></div>
+    <span>Інформація в каталозі може уточнюватися.</span>
+  </footer>
+
+  <!-- Product details -->
+  <dialog id="productDialog" class="modal product-modal">
+    <button class="modal-close" data-close="productDialog" aria-label="Закрити">×</button>
+    <div class="product-modal-layout">
+      <div>
+        <div class="gallery-main" id="galleryMain"></div>
+        <div class="gallery-thumbs" id="galleryThumbs"></div>
       </div>
+      <div class="product-info">
+        <span id="detailCategory" class="badge"></span>
+        <h2 id="detailName"></h2>
+        <dl>
+          <div><dt>Артикул</dt><dd id="detailArticle"></dd></div>
+          <div><dt>Кількість</dt><dd id="detailQuantity"></dd></div>
+          <div><dt>Фото</dt><dd id="detailPhotoCount"></dd></div>
+        </dl>
+        <a id="detailDrive" class="primary buttonlike" target="_blank" rel="noopener">Відкрити оригінал у Google Drive</a>
+        <button id="editProductBtn" class="secondary hidden" type="button">Редагувати позицію</button>
+      </div>
+    </div>
+  </dialog>
 
-      <div class="grid2">
-        <label>Назва
-          <input id="name" required placeholder="Напр. Морозильна скриня" />
-        </label>
-        <label>Категорія
-          <input id="category" required placeholder="Холодильне обладнання" />
-        </label>
-        <label>Ціна, грн
-          <input id="price" type="number" min="0" step="1" placeholder="8500" />
-        </label>
-        <label>Локація
-          <input id="location" placeholder="Чернігів" />
-        </label>
-        <label>Стан
-          <select id="condition">
-            <option>Б/У</option>
-            <option>Нове</option>
-            <option>Потребує ремонту</option>
-          </select>
-        </label>
-        <label>Статус
-          <select id="status">
-            <option>Не подано</option>
-            <option>В продажу</option>
-            <option>Заброньовано</option>
-            <option>Продано</option>
-          </select>
+  <!-- Admin login -->
+  <dialog id="adminLoginDialog" class="modal small-modal">
+    <button class="modal-close" data-close="adminLoginDialog" aria-label="Закрити">×</button>
+    <h2>Режим адміністратора</h2>
+    <p>Введіть ключ адміністратора, заданий у Google Apps Script. Ключ не записується в код сайту.</p>
+    <label>Ключ адміністратора<input id="adminKeyInput" type="password" autocomplete="current-password" /></label>
+    <div class="modal-actions"><button id="adminLoginBtn" class="primary" type="button">Увійти</button></div>
+    <p id="adminLoginMsg" class="form-msg"></p>
+  </dialog>
+
+  <!-- Product editor -->
+  <dialog id="editorDialog" class="modal editor-modal">
+    <button class="modal-close" data-close="editorDialog" aria-label="Закрити">×</button>
+    <form id="editorForm">
+      <div class="editor-head"><div><span class="section-kicker">АДМІН</span><h2 id="editorTitle">Додати позицію</h2></div><span id="apiStatus" class="status-pill"></span></div>
+      <div class="form-grid">
+        <label>Артикул / інвентарний №*<input id="fArticle" required /></label>
+        <label>Кількість*<input id="fQuantity" type="number" min="0" step="1" required /></label>
+        <label class="span2">Найменування на сайт*<input id="fName" required /></label>
+        <label class="span2">Найменування облік<input id="fAccountingName" /></label>
+        <label>Категорія<input id="fCategory" list="categoryList" /></label>
+        <datalist id="categoryList"></datalist>
+        <div></div>
+        <label class="span2">Додати готові Google Drive-посилання<textarea id="fDriveUrls" rows="3" placeholder="По одному посиланню в рядку"></textarea></label>
+        <label class="span2 upload-box">Завантажити нові фото в Google Drive
+          <input id="fFiles" type="file" accept="image/*" multiple />
+          <span>Фото автоматично стискаються до розміру, зручного для каталогу.</span>
         </label>
       </div>
-
-      <label>Опис
-        <textarea id="description" rows="4" placeholder="Короткий опис, розміри, характеристики…"></textarea>
-      </label>
-
-      <label>Фото
-        <input id="photos" type="file" accept="image/*" multiple />
-        <small>Фото, додані через форму, зберігаються локально у браузері цього пристрою.</small>
-      </label>
-      <div id="photoPreview" class="photo-preview"></div>
-
-      <div class="form-actions">
-        <button type="button" id="cancelBtn" class="btn ghost">Скасувати</button>
-        <button type="submit" class="btn primary">Зберегти</button>
+      <div id="existingPhotos" class="existing-photos"></div>
+      <p id="editorMsg" class="form-msg"></p>
+      <div class="modal-actions between">
+        <button id="deleteProductBtn" class="danger hidden" type="button">Видалити позицію</button>
+        <div><button class="secondary" data-close="editorDialog" type="button">Скасувати</button><button id="saveProductBtn" class="primary" type="submit">Зберегти</button></div>
       </div>
     </form>
   </dialog>
 
-  <dialog id="detailDialog" class="dialog detail-dialog">
-    <div id="detailContent"></div>
-  </dialog>
-
+  <iframe name="apiFrame" id="apiFrame" class="hidden-frame" title="API"></iframe>
+  <script src="config.js"></script>
+  <script src="data.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
