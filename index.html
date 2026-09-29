@@ -3138,20 +3138,30 @@ window.CATALOG_PRODUCTS = [
     const id = p?.id || fileId(p?.url);
     if (!id) return p?.url ? [p.url] : [];
     return [
+      `https://lh3.googleusercontent.com/d/${id}=w1400`,
       `https://drive.google.com/thumbnail?id=${id}&sz=w1400`,
       `https://drive.google.com/uc?export=view&id=${id}`
     ];
   };
+  const bustUrl = url => url + (url.includes('?') ? '&' : '?') + '_cb=' + Date.now();
   function imgTag(photo, cls='', alt='Фото обладнання') {
     const c=imageCandidates(photo); if(!c.length) return '';
-    return `<img class="${cls}" src="${esc(c[0])}" data-sources='${esc(JSON.stringify(c))}' data-source-index="0" alt="${esc(alt)}" loading="lazy">`;
+    return `<img class="${cls}" src="${esc(c[0])}" data-sources='${esc(JSON.stringify(c))}' data-source-index="0" data-retry-cycle="0" alt="${esc(alt)}" loading="lazy" referrerpolicy="no-referrer">`;
   }
   document.addEventListener('error', e => {
     const img=e.target;if(!(img instanceof HTMLImageElement) || !img.dataset.sources) return;
     let arr=[]; try{arr=JSON.parse(img.dataset.sources)}catch{};
-    const i=Number(img.dataset.sourceIndex||0)+1;
-    if(i<arr.length){img.dataset.sourceIndex=String(i);img.src=arr[i];}
-    else { const holder=img.closest('.card-media,.gallery-main'); if(holder){holder.innerHTML=noPhotoHtml();} }
+    let i=Number(img.dataset.sourceIndex||0)+1;
+    let cycle=Number(img.dataset.retryCycle||0);
+    if(i<arr.length){
+      img.dataset.sourceIndex=String(i);
+      setTimeout(()=>{ if(img.isConnected) img.src=bustUrl(arr[i]); },500);
+    } else if(cycle<2 && arr.length){
+      cycle+=1; img.dataset.retryCycle=String(cycle); img.dataset.sourceIndex='0';
+      setTimeout(()=>{ if(img.isConnected) img.src=bustUrl(arr[0]); },cycle===1?1800:4500);
+    } else {
+      const holder=img.closest('.card-media,.gallery-main'); if(holder){holder.innerHTML=noPhotoHtml();}
+    }
   }, true);
   const noPhotoHtml = () => `<div class="no-photo"><div><svg viewBox="0 0 24 24"><path d="M4 7h3l1.5-2h7L17 7h3v12H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span>Фото буде додано</span></div></div>`;
 
@@ -3197,6 +3207,13 @@ window.CATALOG_PRODUCTS = [
     $('#categoryList').innerHTML=cats.filter(x=>x!=='Усі').map(c=>`<option value="${esc(c)}"></option>`).join('');
   }
   function find(article){return products.find(p=>p.article===article)}
+  const photoKey = p => String(p?.id || fileId(p?.url) || p?.url || p?.name || '').trim();
+  function showToast(text, type='info'){
+    let t=document.getElementById('catalogToast');
+    if(!t){t=document.createElement('div');t.id='catalogToast';Object.assign(t.style,{position:'fixed',left:'50%',bottom:'24px',transform:'translateX(-50%)',zIndex:'9999',maxWidth:'min(92vw,560px)',padding:'13px 18px',borderRadius:'12px',fontWeight:'800',fontSize:'14px',boxShadow:'0 12px 35px rgba(0,0,0,.25)',transition:'opacity .2s'});document.body.appendChild(t)}
+    t.textContent=text;t.style.background=type==='error'?'#b42318':type==='success'?'#187447':'#102a4a';t.style.color='#fff';t.style.opacity='1';
+    clearTimeout(showToast._timer);showToast._timer=setTimeout(()=>{t.style.opacity='0'},type==='error'?7000:4000);
+  }
 
   function openDetails(article){
     selected=find(article); if(!selected)return;
@@ -3225,7 +3242,7 @@ window.CATALOG_PRODUCTS = [
       const script=document.createElement('script'); const timeout=setTimeout(()=>done(new Error('Таймаут API')),15000);
       function done(err,data){clearTimeout(timeout);delete window[cb];script.remove();err?reject(err):resolve(data)}
       window[cb]=data=>done(null,data);
-      const u=new URL(cfg.API_URL); Object.entries({...params,prefix:cb}).forEach(([k,v])=>u.searchParams.set(k,v)); script.src=u.toString(); script.onerror=()=>done(new Error('API недоступний')); document.body.appendChild(script);
+      const u=new URL(cfg.API_URL); Object.entries({...params,_t:Date.now(),prefix:cb}).forEach(([k,v])=>u.searchParams.set(k,v)); script.src=u.toString(); script.onerror=()=>done(new Error('API недоступний')); document.body.appendChild(script);
     })
   }
   async function loadRemote(){
@@ -3237,7 +3254,7 @@ window.CATALOG_PRODUCTS = [
   function submitApi(payload){
     if(!cfg.API_URL) throw new Error('Спочатку вставте URL Google Apps Script у window.APP_CONFIG всередині index.html');
     const form=document.createElement('form'); form.method='POST';form.action=cfg.API_URL;form.target='apiFrame';form.style.display='none';
-    const input=document.createElement('input');input.type='hidden';input.name='payload';input.value=JSON.stringify(payload);form.appendChild(input);document.body.appendChild(form);form.submit();setTimeout(()=>form.remove(),1000);
+    const input=document.createElement('input');input.type='hidden';input.name='payload';input.value=JSON.stringify(payload);form.appendChild(input);document.body.appendChild(form);form.submit();setTimeout(()=>form.remove(),15000);
   }
   async function waitForRemote(article, predicate, tries=10){
     for(let i=0;i<tries;i++){
@@ -3310,27 +3327,43 @@ window.CATALOG_PRODUCTS = [
 
   async function compressFile(file){
     if(!file.type.startsWith('image/')) throw new Error(`${file.name}: не зображення`);
-    const data=await fileToDataURL(file); const img=await loadImage(data); const max=1800; const scale=Math.min(1,max/Math.max(img.width,img.height));
-    const w=Math.round(img.width*scale),h=Math.round(img.height*scale); const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);
-    return {name:file.name.replace(/\.[^.]+$/,'.jpg'),dataUrl:c.toDataURL('image/jpeg',.84)};
+    const max=1280, quality=.74;
+    let img, revoke='';
+    if('createImageBitmap' in window){img=await createImageBitmap(file);}else{revoke=URL.createObjectURL(file);img=await loadImage(revoke);}
+    const iw=img.width||img.naturalWidth, ih=img.height||img.naturalHeight; const scale=Math.min(1,max/Math.max(iw,ih));
+    const w=Math.max(1,Math.round(iw*scale)),h=Math.max(1,Math.round(ih*scale)); const c=document.createElement('canvas');c.width=w;c.height=h;
+    c.getContext('2d',{alpha:false}).drawImage(img,0,0,w,h);
+    if(img.close) try{img.close()}catch(e){}; if(revoke) URL.revokeObjectURL(revoke);
+    await new Promise(r=>requestAnimationFrame(r));
+    return {name:file.name.replace(/\.[^.]+$/,'.jpg'),dataUrl:c.toDataURL('image/jpeg',quality)};
   }
-  const fileToDataURL=f=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(f)});
   const loadImage=src=>new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=src});
 
   $('#editorForm').onsubmit=async e=>{
     e.preventDefault(); const msg=$('#editorMsg'); msg.className='form-msg';
     if(!cfg.API_URL){msg.textContent='У window.APP_CONFIG всередині index.html потрібно вказати URL Google Apps Script.';msg.classList.add('error');return}
     const article=$('#fArticle').value.trim(), name=$('#fName').value.trim(); if(!article||!name)return;
+    const beforeUpdatedAt=selected?.updatedAt||'';
     $('#saveProductBtn').disabled=true;msg.textContent='Підготовка фото…';
     try{
       const files=pendingFiles.map(x=>x.file); const uploads=[];
-      for(let i=0;i<files.length;i++){msg.textContent=`Опрацювання фото ${i+1}/${files.length}…`;uploads.push(await compressFile(files[i]));}
+      for(let i=0;i<files.length;i++){msg.textContent=`Стискаю фото ${i+1}/${files.length}…`;uploads.push(await compressFile(files[i]));}
       const externalPhotoUrls=$('#fDriveUrls').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
-      const payload={action:'upsert',key:adminKey,product:{article,name,accountingName:$('#fAccountingName').value.trim(),quantity:Number($('#fQuantity').value||0),category:$('#fCategory').value.trim()||'Інше',keepPhotos:editorPhotos.filter(x=>x.keep!==false).map(({keep,...p})=>p),externalPhotoUrls,uploads}};
+      const keepPhotos=editorPhotos.filter(x=>x.keep!==false).map(({keep,...p})=>p);
+      const removePhotoKeys=editorPhotos.filter(x=>x.keep===false).map(photoKey).filter(Boolean);
+      const quantity=Number($('#fQuantity').value||0), category=$('#fCategory').value.trim()||'Інше', accountingName=$('#fAccountingName').value.trim();
+      const payload={action:'upsert',key:adminKey,product:{article,name,accountingName,quantity,category,keepPhotos,removePhotoKeys,externalPhotoUrls,uploads}};
       msg.textContent='Надсилаю зміни в Google…';submitApi(payload);
-      const p=await waitForRemote(article,x=>!!x && x.name===name,12);
-      if(p){msg.textContent='Збережено. Каталог оновлено.';msg.classList.add('success');setTimeout(()=>els.editor.close(),500)}else{msg.textContent='Запит відправлено. Якщо зміни ще не видно, оновіть сторінку через кілька секунд.'}
-    }catch(err){msg.textContent=err.message||'Помилка збереження';msg.classList.add('error')}
+      // На мобільному не тримаємо модальне вікно відкритим, поки Apps Script обробляє фото.
+      els.editor.close(); clearPendingFiles(); showToast(uploads.length?'Фото завантажується у Google Drive…':'Зберігаю зміни…');
+      const p=await waitForRemote(article,x=>{
+        if(!x) return false;
+        const changed = !beforeUpdatedAt || (x.updatedAt && x.updatedAt!==beforeUpdatedAt);
+        return changed && x.name===name && Number(x.quantity||0)===quantity && (x.category||'Інше')===category;
+      },18);
+      if(p){showToast('Збережено. Каталог оновлено.','success');}
+      else{showToast('Зміни відправлено, але підтвердження від Google затримується. Оновіть каталог через кілька секунд.','error');}
+    }catch(err){msg.textContent=err.message||'Помилка збереження';msg.classList.add('error');showToast(msg.textContent,'error'); if(!els.editor.open) els.editor.showModal();}
     finally{$('#saveProductBtn').disabled=false}
   };
   $('#deleteProductBtn').onclick=async()=>{
