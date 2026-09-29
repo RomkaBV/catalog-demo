@@ -148,7 +148,7 @@
   <script>
 window.APP_CONFIG = {
   // Після розгортання Google Apps Script вставте URL, що закінчується на /exec.
-  API_URL: "",
+  API_URL: "https://script.google.com/macros/s/AKfycbwG8EMdorNdYq7UQNKwwTgTolCLYmQN3Z5PJBs5oraoet8KxY4ee-DUQmRtYMPTruFpxA/exec",
   SITE_TITLE: "БУ обладнання та майно",
   SITE_SUBTITLE: "Каталог доступного обладнання з фото, кількістю та артикулом",
   CONTACT_TEXT: "Для уточнення стану, наявності та умов передачі звертайтесь до відповідальної особи."
@@ -3222,7 +3222,7 @@ window.CATALOG_PRODUCTS = [
   }
 
   function submitApi(payload){
-    if(!cfg.API_URL) throw new Error('Спочатку вставте URL Google Apps Script у config.js');
+    if(!cfg.API_URL) throw new Error('Спочатку вставте URL Google Apps Script у window.APP_CONFIG всередині index.html');
     const form=document.createElement('form'); form.method='POST';form.action=cfg.API_URL;form.target='apiFrame';form.style.display='none';
     const input=document.createElement('input');input.type='hidden';input.name='payload';input.value=JSON.stringify(payload);form.appendChild(input);document.body.appendChild(form);form.submit();setTimeout(()=>form.remove(),1000);
   }
@@ -3238,7 +3238,7 @@ window.CATALOG_PRODUCTS = [
     els.add.classList.toggle('hidden',!on); $('#editProductBtn').classList.toggle('hidden',!on||!selected); render();
   }
   $('#adminEntry').onclick=()=>{
-    if(!cfg.API_URL){alert('Адмін-режим готовий, але спочатку потрібно вставити URL розгорнутого Google Apps Script у config.js. Інструкція є в README.md.');return}
+    if(!cfg.API_URL){alert('Адмін-режим готовий, але спочатку потрібно вставити URL розгорнутого Google Apps Script у window.APP_CONFIG всередині index.html. Інструкція є в README.md.');return}
     if(adminKey){if(confirm('Вийти з режиму адміністратора?')){adminKey='';sessionStorage.removeItem('catalogAdminKey');setAdmin(false)}return}
     $('#adminKeyInput').value='';$('#adminLoginMsg').textContent='';els.login.showModal();
   };
@@ -3275,7 +3275,7 @@ window.CATALOG_PRODUCTS = [
 
   $('#editorForm').onsubmit=async e=>{
     e.preventDefault(); const msg=$('#editorMsg'); msg.className='form-msg';
-    if(!cfg.API_URL){msg.textContent='У config.js потрібно вказати URL Google Apps Script.';msg.classList.add('error');return}
+    if(!cfg.API_URL){msg.textContent='У window.APP_CONFIG всередині index.html потрібно вказати URL Google Apps Script.';msg.classList.add('error');return}
     const article=$('#fArticle').value.trim(), name=$('#fName').value.trim(); if(!article||!name)return;
     $('#saveProductBtn').disabled=true;msg.textContent='Підготовка фото…';
     try{
