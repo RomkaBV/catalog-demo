@@ -2,6 +2,10 @@
 <!-- Self-contained GitHub Pages build: CSS, catalog data, JS and hero image are embedded -->
 <html lang="uk">
 <head>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <!-- catalog build V5: dual Google data source -->
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="Інформаційний каталог БУ обладнання та майна" />
@@ -162,6 +166,9 @@
 window.APP_CONFIG = {
   // Після розгортання Google Apps Script вставте URL, що закінчується на /exec.
   API_URL: "https://script.google.com/macros/s/AKfycbwG8EMdorNdYq7UQNKwwTgTolCLYmQN3Z5PJBs5oraoet8KxY4ee-DUQmRtYMPTruFpxA/exec",
+  // Резервне пряме читання Google Sheet. На мобільному використовується першим.
+  SHEET_ID: "1r6sDoby5Jfe0_oZbOH_jIlawvDITta0wZToEaPfGGjY",
+  SHEET_NAME: "Catalog",
   SITE_TITLE: "БУ обладнання та майно",
   SITE_SUBTITLE: "Каталог доступного обладнання з фото, кількістю та артикулом",
   CONTACT_TEXT: "Для уточнення стану, наявності та умов передачі звертайтесь до відповідальної особи."
@@ -3102,9 +3109,12 @@ window.CATALOG_PRODUCTS = [
 </script>
   <script>
 (() => {
+  console.info("BU Catalog build V5 — Google API + Google Sheet fallback");
   const cfg = window.APP_CONFIG || {};
   const fallback = Array.isArray(window.CATALOG_PRODUCTS) ? window.CATALOG_PRODUCTS : [];
-  let products = [...fallback];
+  // Якщо Google налаштований, не показуємо старий Excel як нібито актуальні дані.
+  // Резерв Excel вмикається тільки якщо обидва Google-джерела реально недоступні.
+  let products = (cfg.API_URL || cfg.SHEET_ID) ? [] : [...fallback];
   let filtered = [];
   let activeCategory = 'Усі';
   const IS_MOBILE = window.matchMedia('(max-width: 760px)').matches;
@@ -3115,6 +3125,7 @@ window.CATALOG_PRODUCTS = [
   let pendingFiles = [];
   let adminKey = sessionStorage.getItem('catalogAdminKey') || '';
   let remoteLoaded = false;
+  let remoteSource = '';
   const photoProxyCache = new Map();
 
   const $ = (s) => document.querySelector(s);
@@ -3208,7 +3219,8 @@ window.CATALOG_PRODUCTS = [
   function render(){
     const list=filtered.slice(0,shown);
     els.grid.innerHTML=list.length ? list.map(cardHtml).join('') : `<div class="empty"><strong>Нічого не знайдено</strong>Спробуйте змінити пошук або категорію.</div>`;
-    els.result.textContent=`Знайдено ${filtered.length} позицій` + (remoteLoaded ? ' · дані Google' : ' · дані Excel');
+    const srcLabel = remoteLoaded ? ` · дані Google${remoteSource ? ' ('+remoteSource+')' : ''}` : ((cfg.API_URL || cfg.SHEET_ID) ? ' · резервні дані Excel' : ' · дані Excel');
+    els.result.textContent=`Знайдено ${filtered.length} позицій` + srcLabel;
     els.more.classList.toggle('hidden',shown>=filtered.length);
     wireCards(); updateStats();
   }
@@ -3269,16 +3281,94 @@ window.CATALOG_PRODUCTS = [
     return new Promise((resolve,reject)=>{
       if(!cfg.API_URL) return reject(new Error('API URL не налаштовано'));
       const cb='__catalog_cb_'+Date.now()+'_'+Math.random().toString(36).slice(2);
-      const script=document.createElement('script'); const timeout=setTimeout(()=>done(new Error('Таймаут API')),15000);
-      function done(err,data){clearTimeout(timeout);delete window[cb];script.remove();err?reject(err):resolve(data)}
+      const script=document.createElement('script'); const timeout=setTimeout(()=>done(new Error('Таймаут API')),22000);
+      function done(err,data){clearTimeout(timeout);try{delete window[cb]}catch{};script.remove();err?reject(err):resolve(data)}
       window[cb]=data=>done(null,data);
-      const u=new URL(cfg.API_URL); Object.entries({...params,_t:Date.now(),prefix:cb}).forEach(([k,v])=>u.searchParams.set(k,v)); script.src=u.toString(); script.onerror=()=>done(new Error('API недоступний')); document.body.appendChild(script);
+      const u=new URL(cfg.API_URL); Object.entries({...params,_t:Date.now(),prefix:cb}).forEach(([k,v])=>u.searchParams.set(k,v));
+      script.src=u.toString(); script.async=true; script.onerror=()=>done(new Error('API недоступний')); document.body.appendChild(script);
     })
   }
+
+  // Direct Google Sheets JSONP fallback. The Catalog sheet is public-read only and contains the same live data.
+  // This path is especially useful in Android in-app/custom-tab browsers that intermittently block script.google.com.
+  function sheetJsonp(){
+    return new Promise((resolve,reject)=>{
+      if(!cfg.SHEET_ID) return reject(new Error('SHEET_ID не налаштовано'));
+      const cb='__sheet_cb_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+      const script=document.createElement('script'); const timeout=setTimeout(()=>done(new Error('Таймаут Google Sheet')),22000);
+      function done(err,data){clearTimeout(timeout);try{delete window[cb]}catch{};script.remove();err?reject(err):resolve(data)}
+      window[cb]=data=>done(null,data);
+      const sheet=encodeURIComponent(cfg.SHEET_NAME||'Catalog');
+      const tqx=encodeURIComponent(`out:json;responseHandler:${cb}`);
+      script.src=`https://docs.google.com/spreadsheets/d/${encodeURIComponent(cfg.SHEET_ID)}/gviz/tq?sheet=${sheet}&tqx=${tqx}&tq=${encodeURIComponent('select *')}&_t=${Date.now()}`;
+      script.async=true; script.onerror=()=>done(new Error('Google Sheet недоступний')); document.body.appendChild(script);
+    })
+  }
+
+  function productsFromSheetResponse(r){
+    const rows=r?.table?.rows||[];
+    const cell=(row,i)=>{
+      const c=row?.c?.[i];
+      if(!c) return '';
+      return c.v ?? c.f ?? '';
+    };
+    return rows.map(row=>{
+      const article=String(cell(row,0)||'').trim();
+      let photos=[];
+      try{const v=JSON.parse(String(cell(row,5)||'[]')); if(Array.isArray(v)) photos=v;}catch{}
+      return normalizeProduct({
+        article,
+        name:String(cell(row,1)||''),
+        accountingName:String(cell(row,2)||''),
+        quantity:Number(cell(row,3)||0),
+        category:String(cell(row,4)||'Інше'),
+        photos,
+        updatedAt:String(cell(row,6)||'')
+      });
+    }).filter(p=>p.article);
+  }
+
+  async function apiProducts(){
+    const r=await jsonp({action:'list'});
+    if(!(r?.ok&&Array.isArray(r.products))) throw new Error(r?.error||'Некоректна відповідь API');
+    return r.products.map(normalizeProduct);
+  }
+  async function sheetProducts(){
+    const r=await sheetJsonp();
+    if(r?.status && r.status!=='ok') throw new Error('Google Sheet: '+r.status);
+    const p=productsFromSheetResponse(r);
+    if(!p.length) throw new Error('Google Sheet повернув порожній каталог');
+    return p;
+  }
+  async function retry(fn, tries=2){
+    let last;
+    for(let i=0;i<tries;i++){
+      try{return await fn();}catch(e){last=e;if(i<tries-1)await new Promise(r=>setTimeout(r,1200*(i+1)));}
+    }
+    throw last||new Error('Помилка завантаження');
+  }
+  async function readGoogleProducts(){
+    // На телефоні спочатку читаємо напряму Google Sheet; на ПК — через Apps Script.
+    const sources=IS_MOBILE
+      ? [[sheetProducts,'Sheet'],[apiProducts,'API']]
+      : [[apiProducts,'API'],[sheetProducts,'Sheet']];
+    let last;
+    for(const [fn,label] of sources){
+      try{return {products:await retry(fn,2),source:label};}catch(e){last=e;console.warn(label,e);}
+    }
+    throw last||new Error('Google недоступний');
+  }
   async function loadRemote(){
-    if(!cfg.API_URL){renderChips();apply();return}
-    try{const r=await jsonp({action:'list'});if(r?.ok&&Array.isArray(r.products)){products=r.products.map(normalizeProduct);remoteLoaded=true;renderChips();apply();}}
-    catch(e){console.warn(e);renderChips();apply();}
+    if(!(cfg.API_URL||cfg.SHEET_ID)){products=[...fallback];renderChips();apply();return}
+    els.result.textContent='Завантаження актуальних даних Google…';
+    try{
+      const r=await readGoogleProducts();
+      products=r.products; remoteLoaded=true; remoteSource=r.source; renderChips(); apply();
+    }catch(e){
+      console.warn('Google sources unavailable',e);
+      products=[...fallback]; remoteLoaded=false; remoteSource=''; renderChips(); apply();
+      els.result.textContent=`Google тимчасово недоступний · показано резервні дані Excel (${filtered.length})`;
+    }
   }
 
   function submitApi(payload){
@@ -3288,8 +3378,13 @@ window.CATALOG_PRODUCTS = [
   }
   async function waitForRemote(article, predicate, tries=10){
     for(let i=0;i<tries;i++){
-      await new Promise(r=>setTimeout(r,i?1600:900));
-      try{const data=await jsonp({action:'list',_t:Date.now()}); if(data?.ok&&Array.isArray(data.products)){products=data.products.map(normalizeProduct);remoteLoaded=true; const p=find(article); if(predicate(p)){renderChips();apply();return p;}}}catch{}
+      await new Promise(r=>setTimeout(r,i?1500:800));
+      try{
+        const data=await readGoogleProducts();
+        products=data.products;remoteLoaded=true;remoteSource=data.source;
+        const p=find(article);
+        if(predicate(p)){renderChips();apply();return p;}
+      }catch{}
     }
     return null;
   }
