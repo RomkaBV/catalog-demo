@@ -3115,6 +3115,7 @@ window.CATALOG_PRODUCTS = [
   let pendingFiles = [];
   let adminKey = sessionStorage.getItem('catalogAdminKey') || '';
   let remoteLoaded = false;
+  const photoProxyCache = new Map();
 
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
@@ -3140,16 +3141,40 @@ window.CATALOG_PRODUCTS = [
   const imageCandidates = p => {
     const id = p?.id || fileId(p?.url);
     if (!id) return p?.url ? [p.url] : [];
-    // Drive thumbnail first: it is lighter and substantially more reliable on mobile.
+    // googleusercontent works more consistently in mobile / in-app browsers than Drive view links.
     return [
-      `https://drive.google.com/thumbnail?id=${id}&sz=w900`,
-      `https://lh3.googleusercontent.com/d/${id}=w900`,
+      `https://lh3.googleusercontent.com/d/${id}=w1000`,
+      `https://drive.google.com/thumbnail?id=${id}&sz=w1000`,
+      `https://drive.usercontent.google.com/download?id=${id}&export=view&authuser=0`,
       `https://drive.google.com/uc?export=view&id=${id}`
     ];
   };
   function imgTag(photo, cls='', alt='Фото обладнання', eager=false) {
     const c=imageCandidates(photo); if(!c.length) return '';
-    return `<img class="${cls}" src="${esc(c[0])}" data-sources='${esc(JSON.stringify(c))}' data-source-index="0" data-retry-cycle="0" alt="${esc(alt)}" loading="${eager?'eager':'lazy'}" decoding="async" referrerpolicy="no-referrer">`;
+    const id=photo?.id || fileId(photo?.url);
+    const loading=(IS_MOBILE || eager) ? 'eager' : 'lazy';
+    const priority=(IS_MOBILE || eager) ? 'high' : 'auto';
+    return `<img class="${cls}" src="${esc(c[0])}" data-sources='${esc(JSON.stringify(c))}' data-file-id="${esc(id)}" data-source-index="0" data-retry-cycle="0" data-proxy-tried="0" alt="${esc(alt)}" loading="${loading}" fetchpriority="${priority}" decoding="async">`;
+  }
+  async function apiPhotoData(fileIdValue){
+    if(!fileIdValue || !cfg.API_URL) throw new Error('Фото API недоступне');
+    if(photoProxyCache.has(fileIdValue)) return photoProxyCache.get(fileIdValue);
+    const promise=jsonp({action:'image',id:fileIdValue}).then(r=>{
+      if(!r?.ok || !r.dataUrl) throw new Error(r?.error||'Не вдалося отримати фото');
+      return r.dataUrl;
+    }).catch(err=>{photoProxyCache.delete(fileIdValue);throw err});
+    photoProxyCache.set(fileIdValue,promise);
+    return promise;
+  }
+  async function tryApiPhoto(img){
+    const id=img.dataset.fileId||'';
+    if(!id || img.dataset.proxyTried==='1' || !cfg.API_URL) return false;
+    img.dataset.proxyTried='1';
+    try{
+      const dataUrl=await apiPhotoData(id);
+      if(img.isConnected){img.src=dataUrl;img.classList.remove('photo-load-failed');}
+      return true;
+    }catch(err){console.warn('Photo proxy fallback failed',err);return false;}
   }
   document.addEventListener('error', e => {
     const img=e.target;if(!(img instanceof HTMLImageElement) || !img.dataset.sources) return;
@@ -3158,16 +3183,14 @@ window.CATALOG_PRODUCTS = [
     let cycle=Number(img.dataset.retryCycle||0);
     if(i<arr.length){
       img.dataset.sourceIndex=String(i);
-      setTimeout(()=>{ if(img.isConnected) img.src=arr[i]; },700);
-    } else if(cycle<4 && arr.length){
-      // Mobile data can be slow and Drive can transiently return an error.
-      // Keep retrying instead of permanently replacing a valid photo with the no-photo placeholder.
+      setTimeout(()=>{ if(img.isConnected) img.src=arr[i] + (arr[i].includes('?')?'&':'?') + '_v=' + Date.now(); },450);
+    } else if(cycle<2 && arr.length){
+      // Short direct retries first; then use Apps Script as a browser-independent fallback.
       cycle+=1; img.dataset.retryCycle=String(cycle); img.dataset.sourceIndex='0';
-      const delay=[0,2500,5000,9000,15000][cycle]||15000;
+      const delay=cycle===1?1800:4200;
       setTimeout(()=>{ if(img.isConnected) img.src=arr[0] + (arr[0].includes('?')?'&':'?') + '_retry=' + Date.now(); },delay);
     } else {
-      img.classList.add('photo-load-failed');
-      img.alt='Фото тимчасово не завантажилось';
+      tryApiPhoto(img).then(ok=>{if(!ok&&img.isConnected){img.classList.add('photo-load-failed');img.alt='Фото тимчасово не завантажилось';}});
     }
   }, true);
   const noPhotoHtml = () => `<div class="no-photo"><div><svg viewBox="0 0 24 24"><path d="M4 7h3l1.5-2h7L17 7h3v12H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span>Фото буде додано</span></div></div>`;
@@ -3191,7 +3214,7 @@ window.CATALOG_PRODUCTS = [
   }
   function cardHtml(p,index){
     const photo=p.photos?.[0];
-    const media=photo?imgTag(photo,'',p.name,index<4):noPhotoHtml();
+    const media=photo?imgTag(photo,'',p.name,IS_MOBILE || index<4):noPhotoHtml();
     return `<article class="card" data-article="${esc(p.article)}">
       <div class="card-media" data-open="${esc(p.article)}">${media}${p.photos?.length>1?`<span class="photo-count">${p.photos.length} фото</span>`:''}</div>
       <div class="card-body"><span class="badge">${esc(p.category||'Інше')}</span><h3>${esc(p.name)}</h3>
@@ -3332,19 +3355,47 @@ window.CATALOG_PRODUCTS = [
     e.target.value='';
   });
 
+  function readFileDataUrl(file){
+    return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result||''));r.onerror=()=>reject(r.error||new Error('Не вдалося прочитати фото'));r.readAsDataURL(file)});
+  }
+  function canvasBlob(canvas,type,quality){
+    return new Promise(resolve=>{
+      if(canvas.toBlob) canvas.toBlob(b=>resolve(b),type,quality);
+      else resolve(null);
+    });
+  }
   async function compressFile(file){
     if(!file.type.startsWith('image/')) throw new Error(`${file.name}: не зображення`);
-    const max=1280, quality=.74;
-    let img, revoke='';
-    if('createImageBitmap' in window){img=await createImageBitmap(file);}else{revoke=URL.createObjectURL(file);img=await loadImage(revoke);}
-    const iw=img.width||img.naturalWidth, ih=img.height||img.naturalHeight; const scale=Math.min(1,max/Math.max(iw,ih));
-    const w=Math.max(1,Math.round(iw*scale)),h=Math.max(1,Math.round(ih*scale)); const c=document.createElement('canvas');c.width=w;c.height=h;
-    c.getContext('2d',{alpha:false}).drawImage(img,0,0,w,h);
-    if(img.close) try{img.close()}catch(e){}; if(revoke) URL.revokeObjectURL(revoke);
-    await new Promise(r=>requestAnimationFrame(r));
-    return {name:file.name.replace(/\.[^.]+$/,'.jpg'),dataUrl:c.toDataURL('image/jpeg',quality)};
+    // Small camera photos do not need another decode/re-encode cycle.
+    if(file.size<=320000 && /image\/(jpeg|jpg|png|webp)/i.test(file.type)){
+      return {name:file.name,dataUrl:await readFileDataUrl(file)};
+    }
+    const max=IS_MOBILE?1100:1400, quality=IS_MOBILE?.68:.76;
+    let img=null, revoke='';
+    try{
+      if('createImageBitmap' in window){
+        try{img=await createImageBitmap(file,{imageOrientation:'from-image'});}catch{img=await createImageBitmap(file);}
+      }
+      if(!img){revoke=URL.createObjectURL(file);img=await loadImage(revoke);}
+      const iw=img.width||img.naturalWidth, ih=img.height||img.naturalHeight;
+      if(!iw||!ih) throw new Error('Не вдалося визначити розмір фото');
+      const scale=Math.min(1,max/Math.max(iw,ih));
+      const w=Math.max(1,Math.round(iw*scale)),h=Math.max(1,Math.round(ih*scale));
+      const c=document.createElement('canvas');c.width=w;c.height=h;
+      const ctx=c.getContext('2d',{alpha:false});ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.drawImage(img,0,0,w,h);
+      if(img.close) try{img.close()}catch(e){}; if(revoke){URL.revokeObjectURL(revoke);revoke='';}
+      const blob=await canvasBlob(c,'image/jpeg',quality);
+      const dataUrl=blob ? await readFileDataUrl(blob) : c.toDataURL('image/jpeg',quality);
+      return {name:file.name.replace(/\.[^.]+$/,'.jpg'),dataUrl};
+    }catch(err){
+      if(revoke) try{URL.revokeObjectURL(revoke)}catch(e){}
+      // Some iOS/in-app browsers cannot decode HEIC/large camera images through canvas.
+      // If the original is still reasonably small, upload it unchanged instead of hanging.
+      if(file.size<=4000000) return {name:file.name,dataUrl:await readFileDataUrl(file)};
+      throw new Error(`${file.name}: браузер не зміг стиснути фото. Спробуйте фото меншого розміру або інший браузер.`);
+    }
   }
-  const loadImage=src=>new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=src});
+  const loadImage=src=>new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error('Не вдалося декодувати фото'));i.src=src});
 
   $('#editorForm').onsubmit=async e=>{
     e.preventDefault(); const msg=$('#editorMsg'); msg.className='form-msg';
@@ -3383,6 +3434,9 @@ window.CATALOG_PRODUCTS = [
   els.search.addEventListener('input',()=>{shown=PAGE_SIZE;apply()}); $('#searchBtn').onclick=()=>apply(); els.sort.onchange=()=>apply(); els.more.onclick=()=>{shown+=PAGE_SIZE;render()};
   if(adminKey) setAdmin(true);
   loadRemote();
+  // In-app/mobile browsers often restore a stale page snapshot. Refresh from Google when returning to the tab.
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&cfg.API_URL)loadRemote();});
+  window.addEventListener('pageshow',e=>{if(e.persisted&&cfg.API_URL)loadRemote();});
 })();
 
 </script>
