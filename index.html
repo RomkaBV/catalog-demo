@@ -19,6 +19,7 @@
 
 
 .location-pill{display:flex;align-items:flex-start;gap:7px;margin:10px 0 14px;padding:9px 11px;background:#eaf3ff;color:#145eae;border-radius:10px;font-size:13px;line-height:1.5;font-weight:600;overflow-wrap:anywhere}.location-pin{flex:none}.location-select{max-width:310px;width:100%}.toolbar{flex-wrap:wrap}@media(max-width:760px){.location-select{max-width:none}.location-pill{font-size:12px}}
+.table-scroll{overflow:auto;margin:15px 0}.admin-table{border-collapse:collapse;width:100%;font-size:13px}.admin-table td,.admin-table th{padding:10px;text-align:left;border-bottom:1px solid #e4eaf2;vertical-align:top}.admin-table th{background:#eff5ff;color:#244361}.admin-table button{padding:7px 10px;border-radius:8px;border:1px solid #dce7f6;background:#f2f7ff;cursor:pointer}.form-grid small{font-weight:400;color:#6d7d92;font-size:12px}.form-grid select{width:100%;padding:12px;border:1px solid #dce5f0;border-radius:10px;background:white}
 </style>
 </head>
 <body>
@@ -64,11 +65,10 @@
         <div class="toolbar">
           <select id="locationSelect" class="location-select" aria-label="Локація"><option value="">Усі локації</option></select>
           <select id="sortSelect" aria-label="Сортування">
-            <option value="name">За назвою</option>
-            <option value="article">За артикулом</option>
-            <option value="qtyDesc">Кількість: більше</option>
-            <option value="photos">Спочатку з фото</option>
+            <option value="photos" selected>Спочатку з фото</option>
           </select>
+          <button id="usersBtn" class="secondary hidden" type="button">Користувачі</button>
+          <button id="historyBtn" class="secondary hidden" type="button">Журнал змін</button>
           <button id="restoreArchivedBtn" class="secondary hidden" type="button">↩ Відновити</button>
           <button id="addProductBtn" class="primary hidden" type="button">+ Додати позицію</button>
         </div>
@@ -119,9 +119,10 @@
   <!-- Admin login -->
   <dialog id="adminLoginDialog" class="modal small-modal">
     <button class="modal-close" data-close="adminLoginDialog" aria-label="Закрити">×</button>
-    <h2>Режим адміністратора</h2>
-    <p>Введіть ключ адміністратора, заданий у Google Apps Script. Ключ не записується в код сайту.</p>
-    <label>Ключ адміністратора<input id="adminKeyInput" type="password" autocomplete="current-password" /></label>
+    <h2>Вхід користувача</h2>
+    <p>Увійдіть під персональним логіном і паролем, які надав адміністратор.</p>
+    <label>Логін<input id="userLoginInput" autocomplete="username" autocapitalize="none" spellcheck="false" /></label>
+    <label>Пароль<input id="adminKeyInput" type="password" autocomplete="current-password" /></label>
     <div class="modal-actions"><button id="adminLoginBtn" class="primary" type="button">Увійти</button></div>
     <p id="adminLoginMsg" class="form-msg"></p>
   </dialog>
@@ -136,7 +137,7 @@
         <label>Кількість*<input id="fQuantity" type="number" min="0" step="1" required /></label>
         <label class="span2">Найменування на сайт*<input id="fName" required /></label>
         <label class="span2">Найменування облік<input id="fAccountingName" /></label>
-        <label>Місто<input id="fCity" placeholder="м. Чернігів" /></label>
+        <label>Місто / локація*<input id="fCity" list="cityList" placeholder="Виберіть або введіть довільне місто" required /><datalist id="cityList"></datalist><small>Можна обрати зі списку або написати власну назву.</small></label>
         <label>Адреса<input id="fAddress" placeholder="вул. Інструментальна, 34а" /></label>
         <label>Категорія<input id="fCategory" list="categoryList" /></label>
         <datalist id="categoryList"></datalist>
@@ -166,7 +167,7 @@
       </div>
       <details id="dangerZone" class="danger-zone hidden">
         <summary>Небезпечні дії</summary>
-        <p class="danger-note">Видалення позиції захищене окремим паролем. Фото у Google Drive не видаляються, а позиція переноситься в аркуш Archive.</p>
+        <p class="danger-note">Видаляти позиції може лише адміністратор під своїм обліковим записом. Фото у Google Drive не видаляються, а позиція переноситься в аркуш Archive.</p>
         <button id="deleteProductBtn" class="danger" type="button">Видалити позицію з каталогу</button>
       </details>
     </form>
@@ -176,7 +177,7 @@
     <button class="modal-close" data-close="deleteDialog" aria-label="Закрити">×</button>
     <h2>Видалити позицію</h2>
     <p>Це не видаляє фото з Google Drive. Позиція буде переміщена в аркуш <strong>Archive</strong> і її можна буде відновити.</p>
-    <label>Окремий пароль на видалення<input id="deleteKeyInput" type="password" autocomplete="off" /></label>
+    <p>Позиція буде перенесена в архів. Дія та ваше ім’я будуть записані в журнал.</p>
     <label style="margin-top:12px">Для підтвердження введіть артикул <strong id="deleteArticleHint"></strong><input id="deleteArticleConfirm" autocomplete="off" /></label>
     <div class="modal-actions"><button class="secondary" data-close="deleteDialog" type="button">Скасувати</button><button id="confirmDeleteBtn" class="danger" type="button">Перемістити в Archive</button></div>
     <p id="deleteMsg" class="form-msg"></p>
@@ -187,11 +188,26 @@
     <h2>Відновити позицію</h2>
     <p>Вкажіть артикул позиції з аркуша Archive та пароль на видалення.</p>
     <label>Артикул<input id="restoreArticleInput" autocomplete="off" /></label>
-    <label style="margin-top:12px">Пароль на видалення<input id="restoreKeyInput" type="password" autocomplete="off" /></label>
+    <p>Відновлення буде записано в журнал під вашим іменем.</p>
     <div class="modal-actions"><button class="secondary" data-close="restoreDialog" type="button">Скасувати</button><button id="confirmRestoreBtn" class="primary" type="button">Відновити</button></div>
     <p id="restoreMsg" class="form-msg"></p>
   </dialog>
 
+  <dialog id="usersDialog" class="modal editor-modal">
+    <button class="modal-close" data-close="usersDialog" aria-label="Закрити">×</button>
+    <h2>Користувачі</h2><p>Персональні доступи до додавання обладнання та фотографій.</p>
+    <div class="table-scroll"><table class="admin-table"><thead><tr><th>ПІБ</th><th>Логін</th><th>Роль</th><th>Доступ</th><th></th></tr></thead><tbody id="usersTable"></tbody></table></div>
+    <h3 id="userFormTitle">Додати користувача</h3>
+    <form id="userForm"><input id="userId" type="hidden" /><div class="form-grid">
+      <label>ПІБ<input id="userName" required /></label>
+      <label>Логін<input id="userLogin" required autocomplete="off" autocapitalize="none" placeholder="Латиниця, від 3 символів" /></label>
+      <label>Пароль<input id="userPassword" type="password" autocomplete="new-password" minlength="10" placeholder="Щонайменше 10 символів" /><small>При редагуванні порожнє поле залишає поточний пароль.</small></label>
+      <label>Роль<select id="userRole"><option value="viewer">Перегляд</option><option value="photo">Додавання фото</option><option value="editor">Редактор</option><option value="admin">Адміністратор</option></select></label>
+      <label>Доступ<select id="userActive"><option value="true">Активний</option><option value="false">Заблокований</option></select></label>
+    </div><div class="modal-actions"><button id="newUserBtn" type="button" class="secondary">Новий користувач</button><button id="saveUserBtn" type="submit" class="primary">Зберегти користувача</button></div></form>
+    <p id="usersMsg" class="form-msg"></p>
+  </dialog>
+  <dialog id="historyDialog" class="modal editor-modal"><button class="modal-close" data-close="historyDialog" aria-label="Закрити">×</button><h2>Журнал змін</h2><p>Останні 100 дій користувачів.</p><div class="table-scroll"><table class="admin-table"><thead><tr><th>Дата й час</th><th>Користувач</th><th>Дія</th><th>Артикул</th><th>Зміни</th></tr></thead><tbody id="historyTable"></tbody></table></div><p id="historyMsg" class="form-msg"></p></dialog>
   <iframe name="apiFrame" id="apiFrame" class="hidden-frame" title="API"></iframe>
   <script>
 window.APP_CONFIG = {
@@ -200,7 +216,8 @@ window.APP_CONFIG = {
   // Резервне пряме читання Google Sheet. На мобільному використовується першим.
   SHEET_ID: "1r6sDoby5Jfe0_oZbOH_jIlawvDITta0wZToEaPfGGjY",
   SHEET_NAME: "Catalog",
-  DEFAULT_CITY: "м. Чернігів",
+  DEFAULT_CITY: "Чернігів",
+  CITY_OPTIONS: ["Біла Церква", "Вінниця", "Дніпро", "Житомир", "Запоріжжя", "Івано-Франківськ", "Київ", "Ковель", "Краматорськ", "Кременчук", "Кривий Ріг", "Кропивницький", "Львів", "Львів 3PL", "Миколаїв", "Мукачево", "Ніжин", "Одеса", "Полтава", "Рівне", "Суми", "Тернопіль", "Харків", "Хмельницький", "ЦО", "Черкаси", "Чернівці", "Чернігів", "Шостка"],
   DEFAULT_ADDRESS: "вул. Інструментальна, 34а",
   SITE_TITLE: "БУ обладнання та майно",
   SITE_SUBTITLE: "Каталог доступного обладнання з фото, кількістю та артикулом",
@@ -3142,7 +3159,7 @@ window.CATALOG_PRODUCTS = [
 </script>
   <script>
 (() => {
-  console.info("BU Catalog build V5 — Google API + Google Sheet fallback");
+  console.info("BU Catalog V9 — locations and personal users");
   const cfg = window.APP_CONFIG || {};
   const fallback = Array.isArray(window.CATALOG_PRODUCTS) ? window.CATALOG_PRODUCTS : [];
   // Якщо Google налаштований, не показуємо старий Excel як нібито актуальні дані.
@@ -3157,7 +3174,9 @@ window.CATALOG_PRODUCTS = [
   let selected = null;
   let editorPhotos = [];
   let pendingFiles = [];
-  let adminKey = sessionStorage.getItem('catalogAdminKey') || '';
+  let sessionToken = sessionStorage.getItem('catalogSessionV9') || '';
+  let currentUser = null;
+  sessionStorage.removeItem('catalogAdminKey');
   let remoteLoaded = false;
   let remoteSource = '';
   const photoProxyCache = new Map();
@@ -3240,22 +3259,29 @@ window.CATALOG_PRODUCTS = [
   }, true);
   const noPhotoHtml = () => `<div class="no-photo"><div><svg viewBox="0 0 24 24"><path d="M4 7h3l1.5-2h7L17 7h3v12H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span>Фото буде додано</span></div></div>`;
 
+  function canonicalCity(value){
+    const city=String(value||'').trim().replace(/^м\.\s*/i,'').replace(/\s+/g,' ');
+    return (cfg.CITY_OPTIONS||[]).find(x=>x.toLowerCase()===city.toLowerCase())||city;
+  }
+  function canEdit(){return !!currentUser&&['photo','editor','admin'].includes(currentUser.role);}
   function locationLabel(p){
-    return [String(p.city||cfg.DEFAULT_CITY||'').trim(),String(p.address||cfg.DEFAULT_ADDRESS||'').trim()].filter(Boolean).join(', ');
+    const city=canonicalCity(p.city||cfg.DEFAULT_CITY);
+    const address=p.address===undefined?(city===canonicalCity(cfg.DEFAULT_CITY)?cfg.DEFAULT_ADDRESS:''):String(p.address||'').trim();
+    return [city,address].filter(Boolean).join(', ');
   }
   function renderLocations(){
-    const locations=[...new Set(products.map(locationLabel).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'uk'));
+    const locations=[...new Set([...(cfg.CITY_OPTIONS||[]),...products.map(p=>canonicalCity(p.city||cfg.DEFAULT_CITY))].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'uk'));
     if(activeLocation&&!locations.includes(activeLocation)) activeLocation='';
     els.location.innerHTML='<option value="">Усі локації</option>'+locations.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
     els.location.value=activeLocation;
   }
   function normalizeProduct(p){
-    return {...p, city:String(p.city||cfg.DEFAULT_CITY||'').trim(), address:String(p.address||cfg.DEFAULT_ADDRESS||'').trim(), quantity:Number(p.quantity||0), photos:Array.isArray(p.photos)?p.photos:[], category:p.category||'Інше'};
+    return {...p, city:canonicalCity(p.city||cfg.DEFAULT_CITY), address:p.address===undefined?cfg.DEFAULT_ADDRESS:String(p.address||'').trim(), quantity:Number(p.quantity||0), photos:Array.isArray(p.photos)?p.photos:[], category:p.category||'Інше'};
   }
   function apply(){
     renderLocations();
     const q=norm(els.search.value.trim());
-    filtered=products.map(normalizeProduct).filter(p => (activeCategory==='Усі'||p.category===activeCategory) && (!activeLocation||locationLabel(p)===activeLocation) && (!q || norm(`${p.article} ${p.name} ${p.accountingName||''} ${locationLabel(p)}`).includes(q)));
+    filtered=products.map(normalizeProduct).filter(p => (activeCategory==='Усі'||p.category===activeCategory) && (!activeLocation||canonicalCity(p.city)===activeLocation) && (!q || norm(`${p.article} ${p.name} ${p.accountingName||''} ${locationLabel(p)}`).includes(q)));
     const s=els.sort.value;
     filtered.sort((a,b)=> s==='article' ? a.article.localeCompare(b.article,'uk') : s==='qtyDesc' ? b.quantity-a.quantity : s==='photos' ? (b.photos.length-a.photos.length)||a.name.localeCompare(b.name,'uk') : a.name.localeCompare(b.name,'uk'));
     render();
@@ -3276,7 +3302,7 @@ window.CATALOG_PRODUCTS = [
       <div class="card-body"><span class="badge">${esc(p.category||'Інше')}</span><h3>${esc(p.name)}</h3>
       <div class="location-pill"><span class="location-pin" aria-hidden="true">📍</span><span>${esc(locationLabel(p))}</span></div>
       <div class="meta"><div><span>Артикул</span><strong>${esc(p.article)}</strong></div><div><span>Кількість</span><strong>${esc(p.quantity)} шт.</strong></div></div>
-      <div class="card-actions"><button class="details" data-open="${esc(p.article)}">Детальніше</button>${adminKey?`<button class="edit-mini" data-edit="${esc(p.article)}" title="Редагувати">✎</button>`:''}</div></div></article>`;
+      <div class="card-actions"><button class="details" data-open="${esc(p.article)}">Детальніше</button>${canEdit()?`<button class="edit-mini" data-edit="${esc(p.article)}" title="Редагувати">✎</button>`:''}</div></div></article>`;
   }
   function wireCards(){
     $$('[data-open]').forEach(x=>x.onclick=()=>openDetails(x.dataset.open));
@@ -3310,7 +3336,7 @@ window.CATALOG_PRODUCTS = [
     renderGallery(selected,0);
     const link=selected.photos?.[0] ? driveViewUrl(selected.photos[0]) : '';
     $('#detailDrive').classList.toggle('hidden',!link); if(link) $('#detailDrive').href=link;
-    $('#editProductBtn').classList.toggle('hidden',!adminKey);
+    $('#editProductBtn').classList.toggle('hidden',!canEdit());
     els.detail.showModal();
   }
   function renderGallery(p,index){
@@ -3370,7 +3396,7 @@ window.CATALOG_PRODUCTS = [
         category:String(cell(row,4)||'Інше'),
         photos,
         updatedAt:String(cell(row,6)||''),
-        city:String(cell(row,7)||''), address:String(cell(row,8)||'')
+        city:canonicalCity(cell(row,7)||cfg.DEFAULT_CITY), address:row.c?.[8]?String(cell(row,8)||''):cfg.DEFAULT_ADDRESS
       });
     }).filter(p=>p.article);
   }
@@ -3418,52 +3444,72 @@ window.CATALOG_PRODUCTS = [
     }
   }
 
+  const postQueue=new Map();
+  window.addEventListener('message',e=>{
+    const googleOrigin=e.origin==='https://script.google.com'||/^https:\/\/[a-z0-9-]+\.googleusercontent\.com$/.test(e.origin)||e.origin==='https://script.googleusercontent.com';
+    if(!googleOrigin||e.data?.channel!=='catalog-v9')return;
+    const pending=postQueue.get(e.data.requestId);if(!pending)return;
+    clearTimeout(pending.timer);postQueue.delete(e.data.requestId);pending.frame.remove();pending.form.remove();
+    if(e.data.result?.ok)pending.resolve(e.data.result);else pending.reject(new Error(e.data.result?.error||'Помилка сервера'));
+  });
   function submitApi(payload){
-    if(!cfg.API_URL) throw new Error('Спочатку вставте URL Google Apps Script у window.APP_CONFIG всередині index.html');
-    const form=document.createElement('form'); form.method='POST';form.action=cfg.API_URL;form.target='apiFrame';form.style.display='none';
-    const input=document.createElement('input');input.type='hidden';input.name='payload';input.value=JSON.stringify(payload);form.appendChild(input);document.body.appendChild(form);form.submit();setTimeout(()=>form.remove(),15000);
+    return new Promise((resolve,reject)=>{
+      if(!cfg.API_URL)return reject(new Error('URL Google Apps Script не налаштовано.'));
+      const requestId=crypto.randomUUID(),frame=document.createElement('iframe'),form=document.createElement('form');
+      frame.name='api_'+requestId;frame.className='hidden-frame';frame.title='Збереження';document.body.appendChild(frame);
+      form.method='POST';form.action=cfg.API_URL;form.target=frame.name;form.style.display='none';
+      const input=document.createElement('input');input.type='hidden';input.name='payload';input.value=JSON.stringify({...payload,token:sessionToken,requestId,origin:location.origin});form.appendChild(input);document.body.appendChild(form);
+      const timer=setTimeout(()=>{postQueue.delete(requestId);frame.remove();form.remove();reject(new Error('Google не підтвердив дію. Перевірте оновлення Apps Script або повторіть пізніше.'));},150000);
+      postQueue.set(requestId,{resolve,reject,timer,frame,form});form.submit();
+    });
   }
-  async function waitForRemote(article, predicate, tries=10){
-    for(let i=0;i<tries;i++){
-      await new Promise(r=>setTimeout(r,i?1500:800));
-      try{
-        const data=await readGoogleProducts();
-        products=data.products;remoteLoaded=true;remoteSource=data.source;
-        const p=find(article);
-        if(predicate(p)){renderChips();apply();return p;}
-      }catch{}
-    }
-    return null;
-  }
+  function clearSession(){sessionToken='';currentUser=null;sessionStorage.removeItem('catalogSessionV9');setAdmin();}
 
-  function setAdmin(on){
-    els.add.classList.toggle('hidden',!on); els.restore.classList.toggle('hidden',!on); $('#editProductBtn').classList.toggle('hidden',!on||!selected); render();
+  function setAdmin(){
+    const role=currentUser?.role,isAdmin=role==='admin';
+    els.add.classList.toggle('hidden',!['editor','admin'].includes(role));els.restore.classList.toggle('hidden',!isAdmin);
+    $('#usersBtn').classList.toggle('hidden',!isAdmin);$('#historyBtn').classList.toggle('hidden',!isAdmin);
+    $('#editProductBtn').classList.toggle('hidden',!canEdit()||!selected);
+    $('#adminEntry').textContent=currentUser?`👤 ${currentUser.name}`:'Увійти';render();
   }
-  $('#adminEntry').onclick=()=>{
-    if(!cfg.API_URL){alert('Адмін-режим готовий, але спочатку потрібно вставити URL розгорнутого Google Apps Script у window.APP_CONFIG всередині index.html. Інструкція є в README.md.');return}
-    if(adminKey){if(confirm('Вийти з режиму адміністратора?')){adminKey='';sessionStorage.removeItem('catalogAdminKey');setAdmin(false)}return}
+  $('#adminEntry').onclick=async()=>{
+    if(currentUser){if(confirm('Вийти з облікового запису?')){try{await submitApi({action:'logout'});}catch{}clearSession();}return;}
     $('#adminKeyInput').value='';$('#adminLoginMsg').textContent='';els.login.showModal();
   };
-  $('#adminLoginBtn').onclick=()=>{
-    const key=$('#adminKeyInput').value.trim();const msg=$('#adminLoginMsg'); if(!key){msg.textContent='Введіть ключ.';return}
-    // Ключ навмисно не передається через GET/URL. Backend перевіряє його лише під час запису.
-    adminKey=key;sessionStorage.setItem('catalogAdminKey',key);els.login.close();setAdmin(true);
+  $('#adminLoginBtn').onclick=async()=>{
+    const login=$('#userLoginInput').value.trim(),password=$('#adminKeyInput').value,msg=$('#adminLoginMsg'),button=$('#adminLoginBtn');
+    if(!login||!password){msg.textContent='Вкажіть логін і пароль.';return;}
+    button.disabled=true;msg.textContent='Перевіряю доступ…';
+    try{
+      const cap=await jsonp({action:'capabilities'});
+      if(cap?.schemaVersion!==9)throw new Error('На Google ще стара версія. Встановіть усі файли Apps Script V9 та опублікуйте нову версію введення в дію.');
+      const r=await submitApi({action:'login',login,password});
+      sessionToken=r.token;currentUser=r.user;sessionStorage.setItem('catalogSessionV9',sessionToken);$('#adminKeyInput').value='';els.login.close();setAdmin();
+    }catch(e){msg.textContent=e.message;msg.className='form-msg error';}finally{button.disabled=false;}
   };
+  ['#userLoginInput','#adminKeyInput'].forEach(id=>$(id).addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();$('#adminLoginBtn').click();}}));
+  $('#cityList').innerHTML=(cfg.CITY_OPTIONS||[]).map(x=>`<option value="${esc(x)}"></option>`).join('');
+  $('#fCity').addEventListener('change',()=>{
+    $('#fCity').value=canonicalCity($('#fCity').value);
+    if(canonicalCity($('#fCity').value)!==canonicalCity(cfg.DEFAULT_CITY)&&$('#fAddress').value===cfg.DEFAULT_ADDRESS)$('#fAddress').value='';
+  });
 
   els.add.onclick=()=>openEditor(null);
   $('#editProductBtn').onclick=()=>{els.detail.close();openEditor(selected)};
   function openEditor(p){
+    if(!canEdit()){showToast('Увійдіть під користувачем із правом редагування.','error');return;}
     selected=p||null; editorPhotos=(p?.photos||[]).map(x=>({...x,keep:true}));
     $('#editorTitle').textContent=p?'Редагувати позицію':'Додати позицію';
     $('#fArticle').value=p?.article||''; $('#fArticle').readOnly=!!p;
     $('#fQuantity').value=p?.quantity??1; $('#fName').value=p?.name||''; $('#fAccountingName').value=p?.accountingName||''; $('#fCategory').value=p?.category||'Інше';
-    $('#fCity').value=p?.city||cfg.DEFAULT_CITY||''; $('#fAddress').value=p?.address||cfg.DEFAULT_ADDRESS||'';
+    $('#fCity').value=p?.city||cfg.DEFAULT_CITY||''; $('#fAddress').value=p?(p.address===undefined?cfg.DEFAULT_ADDRESS:p.address):cfg.DEFAULT_ADDRESS;
     $('#fDriveUrls').value='';$('#fFiles').value='';$('#fCamera').value='';clearPendingFiles();$('#editorMsg').textContent='';
-    $('#dangerZone').classList.toggle('hidden',!p); $('#apiStatus').textContent=cfg.API_URL?'Google API підключено':'API не налаштовано';$('#apiStatus').classList.toggle('ok',!!cfg.API_URL);
+    ['#fArticle','#fQuantity','#fName','#fAccountingName','#fCategory','#fCity','#fAddress'].forEach(id=>$(id).disabled=currentUser?.role==='photo');
+    $('#dangerZone').classList.toggle('hidden',!p||currentUser?.role!=='admin'); $('#apiStatus').textContent=cfg.API_URL?'Google API підключено':'API не налаштовано';$('#apiStatus').classList.toggle('ok',!!cfg.API_URL);
     renderExistingPhotos();els.editor.showModal();
   }
   function renderExistingPhotos(){
-    $('#existingPhotos').innerHTML=editorPhotos.length?`<div class="span2" style="width:100%;font-size:13px;font-weight:800">Поточні фото</div>`+editorPhotos.map((p,i)=>`<div class="existing-photo ${p.keep===false?'marked-delete':''}">${imgTag(p,'',`Фото ${i+1}`)}<button type="button" class="photo-remove ${p.keep===false?'undo':''}" data-photo-remove="${i}">${p.keep===false?'↩ Скасувати':'🗑 Видалити фото'}</button></div>`).join(''):'';
+    $('#existingPhotos').innerHTML=editorPhotos.length?`<div class="span2" style="width:100%;font-size:13px;font-weight:800">Поточні фото</div>`+editorPhotos.map((p,i)=>`<div class="existing-photo ${p.keep===false?'marked-delete':''}">${imgTag(p,'',`Фото ${i+1}`)}<button type="button" class="photo-remove ${p.keep===false?'undo':''}" data-photo-remove="${i}" ${currentUser?.role==='photo'?'disabled':''}>${p.keep===false?'↩ Скасувати':'🗑 Видалити фото'}</button></div>`).join(''):'';
     $$('[data-photo-remove]').forEach(x=>x.onclick=()=>{const i=Number(x.dataset.photoRemove);editorPhotos[i].keep=editorPhotos[i].keep===false;renderExistingPhotos();});
   }
 
@@ -3541,64 +3587,73 @@ window.CATALOG_PRODUCTS = [
   const loadImage=src=>new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error('Не вдалося декодувати фото'));i.src=src});
 
   $('#editorForm').onsubmit=async e=>{
-    e.preventDefault(); const msg=$('#editorMsg'); msg.className='form-msg';
-    if(!cfg.API_URL){msg.textContent='У window.APP_CONFIG всередині index.html потрібно вказати URL Google Apps Script.';msg.classList.add('error');return}
-    const article=$('#fArticle').value.trim(), name=$('#fName').value.trim(); if(!article||!name)return;
-    const beforeUpdatedAt=selected?.updatedAt||'';
-    $('#saveProductBtn').disabled=true;msg.textContent='Підготовка фото…';
+    e.preventDefault();const msg=$('#editorMsg');msg.className='form-msg';
+    const article=$('#fArticle').value.trim(),name=$('#fName').value.trim(),city=canonicalCity($('#fCity').value),address=$('#fAddress').value.trim();
+    if(!article||!name||!city){msg.textContent='Вкажіть артикул, назву й місто.';return;}
+    $('#saveProductBtn').disabled=true;
     try{
-      const files=pendingFiles.map(x=>x.file); const uploads=[];
-      for(let i=0;i<files.length;i++){msg.textContent=`Стискаю фото ${i+1}/${files.length}…`;uploads.push(await compressFile(files[i]));}
+      const uploads=[];for(let i=0;i<pendingFiles.length;i++){msg.textContent=`Підготовка фото ${i+1}/${pendingFiles.length}…`;uploads.push(await compressFile(pendingFiles[i].file));}
+      const keepPhotos=editorPhotos.filter(x=>x.keep!==false).map(({keep,...p})=>p),removePhotoKeys=editorPhotos.filter(x=>x.keep===false).map(photoKey).filter(Boolean);
       const externalPhotoUrls=$('#fDriveUrls').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
-      const keepPhotos=editorPhotos.filter(x=>x.keep!==false).map(({keep,...p})=>p);
-      const removePhotoKeys=editorPhotos.filter(x=>x.keep===false).map(photoKey).filter(Boolean);
-      const quantity=Number($('#fQuantity').value||0), category=$('#fCategory').value.trim()||'Інше', accountingName=$('#fAccountingName').value.trim();
-      const city=$('#fCity').value.trim(), address=$('#fAddress').value.trim();
-      const payload={action:'upsert',key:adminKey,product:{article,name,accountingName,quantity,category,city,address,keepPhotos,removePhotoKeys,externalPhotoUrls,uploads}};
-      msg.textContent='Надсилаю зміни в Google…';submitApi(payload);
-      // На мобільному не тримаємо модальне вікно відкритим, поки Apps Script обробляє фото.
-      els.editor.close(); clearPendingFiles(); showToast(uploads.length?'Фото завантажується у Google Drive…':'Зберігаю зміни…');
-      const p=await waitForRemote(article,x=>{
-        if(!x) return false;
-        const changed = !beforeUpdatedAt || (x.updatedAt && x.updatedAt!==beforeUpdatedAt);
-        return changed && x.name===name && Number(x.quantity||0)===quantity && (x.category||'Інше')===category && x.city===(city||cfg.DEFAULT_CITY) && x.address===(address||cfg.DEFAULT_ADDRESS);
-      },18);
-      if(p){showToast('Збережено. Каталог оновлено.','success');}
-      else{showToast('Зміни відправлено, але підтвердження від Google затримується. Оновіть каталог через кілька секунд.','error');}
-    }catch(err){msg.textContent=err.message||'Помилка збереження';msg.classList.add('error');showToast(msg.textContent,'error'); if(!els.editor.open) els.editor.showModal();}
-    finally{$('#saveProductBtn').disabled=false}
+      const product={article,name,city,address,accountingName:$('#fAccountingName').value.trim(),quantity:Number($('#fQuantity').value||0),category:$('#fCategory').value.trim()||'Інше',keepPhotos,removePhotoKeys,externalPhotoUrls,uploads};
+      msg.textContent='Зберігаю дані та фото…';
+      const r=await submitApi({action:'upsert',product});const saved=normalizeProduct(r.product);
+      products=products.filter(x=>x.article!==saved.article);products.push(saved);remoteLoaded=true;remoteSource='API';
+      els.editor.close();clearPendingFiles();renderChips();apply();showToast('Збережено: '+locationLabel(saved),'success');
+    }catch(e){msg.textContent=e.message;msg.classList.add('error');}finally{$('#saveProductBtn').disabled=false;}
   };
   $('#deleteProductBtn').onclick=()=>{
-    if(!selected)return;
-    $('#deleteKeyInput').value=''; $('#deleteArticleConfirm').value=''; $('#deleteArticleHint').textContent=selected.article; $('#deleteMsg').textContent='';
-    document.getElementById('deleteDialog').showModal();
+    if(!selected||currentUser?.role!=='admin')return;
+    $('#deleteArticleConfirm').value='';$('#deleteArticleHint').textContent=selected.article;$('#deleteMsg').textContent='';$('#deleteDialog').showModal();
   };
   $('#confirmDeleteBtn').onclick=async()=>{
-    if(!selected)return;
-    const article=selected.article, deleteKey=$('#deleteKeyInput').value.trim(), confirmArticle=$('#deleteArticleConfirm').value.trim(), msg=$('#deleteMsg');
-    msg.className='form-msg';
-    if(confirmArticle!==article){msg.textContent='Артикул не співпадає. Видалення не виконано.';msg.classList.add('error');return;}
-    if(!deleteKey){msg.textContent='Введіть окремий пароль на видалення.';msg.classList.add('error');return;}
-    msg.textContent='Переміщую в Archive…';
-    submitApi({action:'delete',key:adminKey,deleteKey,article});
-    const gone=await waitForRemote(article,x=>!x,12);
-    if(!gone){msg.textContent='Google ще не підтвердив видалення. Перевірте пароль або повторіть через кілька секунд.';msg.classList.add('error');return;}
-    document.getElementById('deleteDialog').close(); if(els.editor.open) els.editor.close(); selected=null; renderChips(); apply(); showToast('Позицію переміщено в Archive. Її можна відновити.','success');
+    if(!selected)return;const article=selected.article,msg=$('#deleteMsg'),button=$('#confirmDeleteBtn');
+    if($('#deleteArticleConfirm').value.trim()!==article){msg.textContent='Артикул не співпадає.';return;}
+    button.disabled=true;msg.textContent='Переношу в архів…';
+    try{await submitApi({action:'delete',article});products=products.filter(x=>x.article!==article);$('#deleteDialog').close();if(els.editor.open)els.editor.close();selected=null;renderChips();apply();showToast('Позицію перенесено в архів.','success');}
+    catch(e){msg.textContent=e.message;}finally{button.disabled=false;}
   };
-  els.restore.onclick=()=>{ $('#restoreArticleInput').value=''; $('#restoreKeyInput').value=''; $('#restoreMsg').textContent=''; document.getElementById('restoreDialog').showModal(); };
+  els.restore.onclick=()=>{$('#restoreArticleInput').value='';$('#restoreMsg').textContent='';$('#restoreDialog').showModal();};
   $('#confirmRestoreBtn').onclick=async()=>{
-    const article=$('#restoreArticleInput').value.trim(), deleteKey=$('#restoreKeyInput').value.trim(), msg=$('#restoreMsg'); msg.className='form-msg';
-    if(!article||!deleteKey){msg.textContent='Вкажіть артикул і пароль на видалення.';msg.classList.add('error');return;}
-    msg.textContent='Відновлюю…'; submitApi({action:'restore',key:adminKey,deleteKey,article});
-    const restored=await waitForRemote(article,x=>!!x,12);
-    if(!restored){msg.textContent='Не вдалося відновити. Перевірте артикул, пароль і наявність позиції в Archive.';msg.classList.add('error');return;}
-    document.getElementById('restoreDialog').close(); showToast('Позицію відновлено з Archive.','success'); renderChips(); apply();
+    const article=$('#restoreArticleInput').value.trim(),msg=$('#restoreMsg'),button=$('#confirmRestoreBtn');if(!article){msg.textContent='Вкажіть артикул.';return;}
+    button.disabled=true;msg.textContent='Відновлюю…';
+    try{const r=await submitApi({action:'restore',article});products=products.filter(x=>x.article!==article);products.push(normalizeProduct(r.product));$('#restoreDialog').close();renderChips();apply();showToast('Позицію відновлено.','success');}
+    catch(e){msg.textContent=e.message;}finally{button.disabled=false;}
+  };
+  const roleLabels={viewer:'Перегляд',photo:'Додавання фото',editor:'Редактор',admin:'Адміністратор'};
+  let adminUsers=[];
+  function resetUserForm(){ $('#userForm').reset();$('#userId').value='';$('#userPassword').required=true;$('#userFormTitle').textContent='Додати користувача'; }
+  async function refreshUsers(){
+    const r=await submitApi({action:'listUsers'});adminUsers=r.users;
+    $('#usersTable').innerHTML=adminUsers.map(u=>`<tr><td>${esc(u.name)}</td><td>${esc(u.login)}</td><td>${esc(roleLabels[u.role]||u.role)}</td><td>${u.active?'Активний':'Заблокований'}</td><td><button type="button" data-user-edit="${esc(u.id)}">Редагувати</button></td></tr>`).join('');
+    $$('[data-user-edit]').forEach(button=>button.onclick=()=>{
+      const u=adminUsers.find(x=>x.id===button.dataset.userEdit);if(!u)return;
+      $('#userId').value=u.id;$('#userName').value=u.name;$('#userLogin').value=u.login;$('#userRole').value=u.role;$('#userActive').value=String(u.active);$('#userPassword').value='';$('#userPassword').required=false;$('#userFormTitle').textContent='Редагувати користувача';
+    });
+  }
+  $('#usersBtn').onclick=async()=>{resetUserForm();$('#usersMsg').textContent='Завантаження…';$('#usersDialog').showModal();try{await refreshUsers();$('#usersMsg').textContent='';}catch(e){$('#usersMsg').textContent=e.message;}};
+  $('#newUserBtn').onclick=resetUserForm;
+  $('#userForm').onsubmit=async e=>{
+    e.preventDefault();const msg=$('#usersMsg'),button=$('#saveUserBtn');button.disabled=true;msg.textContent='Зберігаю користувача…';
+    try{
+      const user={id:$('#userId').value,login:$('#userLogin').value,name:$('#userName').value,role:$('#userRole').value,active:$('#userActive').value==='true',password:$('#userPassword').value};
+      await submitApi({action:'saveUser',user});$('#userPassword').value='';
+      if(user.id===currentUser?.id){$('#usersDialog').close();clearSession();showToast('Ваш доступ оновлено. Увійдіть ще раз.');return;}
+      resetUserForm();await refreshUsers();msg.textContent='Користувача збережено.';
+    }catch(e){msg.textContent=e.message;}finally{button.disabled=false;}
+  };
+  $('#historyBtn').onclick=async()=>{
+    $('#historyMsg').textContent='Завантаження…';$('#historyDialog').showModal();
+    const labels={CREATE:'Додано',UPDATE:'Змінено',DELETE:'В архів',RESTORE:'Відновлено',LOGIN:'Вхід',USER_CREATE:'Новий користувач',USER_UPDATE:'Зміна доступу'};
+    try{const r=await submitApi({action:'history'});$('#historyTable').innerHTML=r.history.map(x=>`<tr><td>${esc(new Date(x.timestamp).toLocaleString('uk-UA',{timeZone:'Europe/Kyiv'}))}</td><td>${esc(x.name)}<br>${esc(x.login)}</td><td>${esc(labels[x.action]||x.action)}</td><td>${esc(x.article)}</td><td>${esc(x.summary)}</td></tr>`).join('');$('#historyMsg').textContent=r.history.length?'':'Журнал поки порожній.';}
+    catch(e){$('#historyMsg').textContent=e.message;}
   };
 
   $$('.modal-close,[data-close]').forEach(b=>b.addEventListener('click',()=>{const d=document.getElementById(b.dataset.close)||b.closest('dialog');if(d?.open)d.close()}));
   els.location.onchange=()=>{activeLocation=els.location.value;shown=PAGE_SIZE;apply()};
   els.search.addEventListener('input',()=>{shown=PAGE_SIZE;apply()}); $('#searchBtn').onclick=()=>apply(); els.sort.onchange=()=>apply(); els.more.onclick=()=>{shown+=PAGE_SIZE;render()};
-  if(adminKey) setAdmin(true);
+  setAdmin();
+  if(sessionToken)submitApi({action:'session'}).then(r=>{currentUser=r.user;setAdmin();}).catch(()=>clearSession());
   loadRemote();
   // In-app/mobile browsers often restore a stale page snapshot. Refresh from Google when returning to the tab.
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&cfg.API_URL)loadRemote();});
