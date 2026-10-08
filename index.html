@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <!-- catalog build V7: migration-ready Google/Server image storage -->
+  <!-- catalog build V5: dual Google data source -->
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="Інформаційний каталог БУ обладнання та майна" />
@@ -17,6 +17,8 @@
 @media(max-width:760px){.topbar{height:66px;padding:0 16px}.brand small{display:none}.nav a{display:none}.nav{gap:12px}.hero-content{padding:55px 0}.hero-stats{gap:22px}.searchbox{height:auto;border-radius:14px;padding:7px 7px 7px 14px}.searchbox button{padding:12px}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.catalog-section{width:min(100% - 24px,1240px);padding:48px 0}.section-head{align-items:start;flex-direction:column}.toolbar{width:100%}.toolbar select{flex:1}.card-body{padding:13px}.card h3{font-size:15px}.about{width:min(100% - 24px,1240px);padding:24px}footer{flex-direction:column}.product-modal{padding:17px}.product-info h2{font-size:26px}.form-grid{grid-template-columns:1fr}.span2{grid-column:1}.editor-modal{padding:22px}.between{align-items:stretch;flex-direction:column}.between>div{display:flex;gap:8px}.between>div button{flex:1}}
 @media(max-width:480px){.grid{grid-template-columns:1fr}.hero-stats{justify-content:space-between;gap:8px}.hero-stats strong{font-size:23px}.hero-stats span{font-size:9px}.searchbox svg{display:none}.searchbox input{font-size:14px}.hero h1{font-size:39px}}
 
+
+.location-pill{display:flex;align-items:flex-start;gap:7px;margin:10px 0 14px;padding:9px 11px;background:#eaf3ff;color:#145eae;border-radius:10px;font-size:13px;line-height:1.5;font-weight:600;overflow-wrap:anywhere}.location-pin{flex:none}.location-select{max-width:310px;width:100%}.toolbar{flex-wrap:wrap}@media(max-width:760px){.location-select{max-width:none}.location-pill{font-size:12px}}
 </style>
 </head>
 <body>
@@ -60,6 +62,7 @@
           <p id="resultText">Завантаження каталогу…</p>
         </div>
         <div class="toolbar">
+          <select id="locationSelect" class="location-select" aria-label="Локація"><option value="">Усі локації</option></select>
           <select id="sortSelect" aria-label="Сортування">
             <option value="name">За назвою</option>
             <option value="article">За артикулом</option>
@@ -103,6 +106,7 @@
         <h2 id="detailName"></h2>
         <dl>
           <div><dt>Артикул</dt><dd id="detailArticle"></dd></div>
+          <div><dt>Локація</dt><dd id="detailLocation"></dd></div>
           <div><dt>Кількість</dt><dd id="detailQuantity"></dd></div>
           <div><dt>Фото</dt><dd id="detailPhotoCount"></dd></div>
         </dl>
@@ -132,6 +136,8 @@
         <label>Кількість*<input id="fQuantity" type="number" min="0" step="1" required /></label>
         <label class="span2">Найменування на сайт*<input id="fName" required /></label>
         <label class="span2">Найменування облік<input id="fAccountingName" /></label>
+        <label>Місто<input id="fCity" placeholder="м. Чернігів" /></label>
+        <label>Адреса<input id="fAddress" placeholder="вул. Інструментальна, 34а" /></label>
         <label>Категорія<input id="fCategory" list="categoryList" /></label>
         <datalist id="categoryList"></datalist>
         <div></div>
@@ -194,22 +200,8 @@ window.APP_CONFIG = {
   // Резервне пряме читання Google Sheet. На мобільному використовується першим.
   SHEET_ID: "1r6sDoby5Jfe0_oZbOH_jIlawvDITta0wZToEaPfGGjY",
   SHEET_NAME: "Catalog",
-
-  // Сховище фото:
-  // "google-drive" — поточний режим на GitHub Pages;
-  // "auto" — спочатку фото з сервера, якщо немає — Google Drive;
-  // "server" — тільки локальні фото на вашому сервері.
-  IMAGE_PROVIDER: "google-drive",
-  // Куди завантажувати НОВІ фото:
-  // "google-drive" — поточний режим;
-  // "server" — після перенесення на платний сервер.
-  UPLOAD_PROVIDER: "google-drive",
-  // Папка має лежати ПОРУЧ з index.html: ./assets/catalog/
-  // В середині: <артикул>/<ім'я_файлу>.
-  IMAGE_BASE_URL: "./assets/catalog/",
-  // Майбутній PHP endpoint для прямого завантаження фото на платний сервер.
-  SERVER_UPLOAD_URL: "./server-api/upload.php",
-
+  DEFAULT_CITY: "м. Чернігів",
+  DEFAULT_ADDRESS: "вул. Інструментальна, 34а",
   SITE_TITLE: "БУ обладнання та майно",
   SITE_SUBTITLE: "Каталог доступного обладнання з фото, кількістю та артикулом",
   CONTACT_TEXT: "Для уточнення стану, наявності та умов передачі звертайтесь до відповідальної особи."
@@ -3150,7 +3142,7 @@ window.CATALOG_PRODUCTS = [
 </script>
   <script>
 (() => {
-  console.info("BU Catalog build V7 — migration-ready Google/Server image storage");
+  console.info("BU Catalog build V5 — Google API + Google Sheet fallback");
   const cfg = window.APP_CONFIG || {};
   const fallback = Array.isArray(window.CATALOG_PRODUCTS) ? window.CATALOG_PRODUCTS : [];
   // Якщо Google налаштований, не показуємо старий Excel як нібито актуальні дані.
@@ -3158,6 +3150,7 @@ window.CATALOG_PRODUCTS = [
   let products = (cfg.API_URL || cfg.SHEET_ID) ? [] : [...fallback];
   let filtered = [];
   let activeCategory = 'Усі';
+  let activeLocation = '';
   const IS_MOBILE = window.matchMedia('(max-width: 760px)').matches;
   const PAGE_SIZE = IS_MOBILE ? 10 : 24;
   let shown = PAGE_SIZE;
@@ -3172,7 +3165,7 @@ window.CATALOG_PRODUCTS = [
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const els = {
-    grid: $('#catalogGrid'), search: $('#searchInput'), sort: $('#sortSelect'), chips: $('#categoryChips'),
+    location: $('#locationSelect'), grid: $('#catalogGrid'), search: $('#searchInput'), sort: $('#sortSelect'), chips: $('#categoryChips'),
     result: $('#resultText'), more: $('#loadMoreBtn'), statProducts: $('#statProducts'), statPhotos: $('#statWithPhotos'),
     statQty: $('#statQuantity'), add: $('#addProductBtn'), restore: $('#restoreArchivedBtn'), login: $('#adminLoginDialog'), editor: $('#editorDialog'),
     detail: $('#productDialog')
@@ -3190,30 +3183,10 @@ window.CATALOG_PRODUCTS = [
     return m ? m[1] : '';
   };
   const driveViewUrl = p => p?.url || (p?.id ? `https://drive.google.com/file/d/${p.id}/view` : '');
-
-  // V7: постійний ключ фото, незалежний від Google Drive.
-  // На майбутньому сервері файл лежить у:
-  // ./assets/catalog/<article>/<fileName>
-  const safePathSegment = value => String(value||'').trim().replace(/[\\/:*?"<>|]+/g,'_').replace(/\s+/g,'_') || '_';
-  const photoFileName = p => {
-    let name=String(p?.fileName || p?.name || '').trim();
-    if(!/\.[A-Za-z0-9]{2,5}$/.test(name)){
-      const id=p?.id || fileId(p?.url);
-      name=id ? `${id}.jpg` : (name || 'photo.jpg');
-    }
-    return safePathSegment(name);
-  };
-  const storageKeyFor = (p, article='') => String(p?.storageKey || `${safePathSegment(article)}/${photoFileName(p)}`).replace(/^\/+/,'');
-  const encodeStorageKey = key => String(key||'').split('/').filter(Boolean).map(encodeURIComponent).join('/');
-  const serverPhotoUrl = (p, article='') => {
-    const base=String(cfg.IMAGE_BASE_URL || './assets/catalog/').replace(/\/?$/,'/');
-    const key=storageKeyFor(p,article);
-    return key ? base + encodeStorageKey(key) : '';
-  };
-  const driveCandidates = p => {
+  const imageCandidates = p => {
     const id = p?.id || fileId(p?.url);
     if (!id) return p?.url ? [p.url] : [];
-    // googleusercontent працює стабільніше в мобільних браузерах, далі — резервні Drive URL.
+    // googleusercontent works more consistently in mobile / in-app browsers than Drive view links.
     return [
       `https://lh3.googleusercontent.com/d/${id}=w1000`,
       `https://drive.google.com/thumbnail?id=${id}&sz=w1000`,
@@ -3221,23 +3194,13 @@ window.CATALOG_PRODUCTS = [
       `https://drive.google.com/uc?export=view&id=${id}`
     ];
   };
-  const imageCandidates = (p, article='') => {
-    const provider=String(cfg.IMAGE_PROVIDER || 'google-drive').toLowerCase();
-    const server=serverPhotoUrl(p,article);
-    const drive=driveCandidates(p);
-    if(provider==='server') return server ? [server] : [];
-    if(provider==='auto') return [...(server?[server]:[]),...drive];
-    // Поточний режим: Google Drive. Якщо Drive-даних немає, локальний сервер лишається резервом.
-    return drive.length ? drive : (server?[server]:[]);
-  };
-  function imgTag(photo, cls='', alt='Фото обладнання', eager=false, article='') {
-    const c=imageCandidates(photo,article); if(!c.length) return '';
+  function imgTag(photo, cls='', alt='Фото обладнання', eager=false) {
+    const c=imageCandidates(photo); if(!c.length) return '';
     const id=photo?.id || fileId(photo?.url);
     const loading=(IS_MOBILE || eager) ? 'eager' : 'lazy';
     const priority=(IS_MOBILE || eager) ? 'high' : 'auto';
     return `<img class="${cls}" src="${esc(c[0])}" data-sources='${esc(JSON.stringify(c))}' data-file-id="${esc(id)}" data-source-index="0" data-retry-cycle="0" data-proxy-tried="0" alt="${esc(alt)}" loading="${loading}" fetchpriority="${priority}" decoding="async">`;
   }
-
   async function apiPhotoData(fileIdValue){
     if(!fileIdValue || !cfg.API_URL) throw new Error('Фото API недоступне');
     if(photoProxyCache.has(fileIdValue)) return photoProxyCache.get(fileIdValue);
@@ -3277,19 +3240,29 @@ window.CATALOG_PRODUCTS = [
   }, true);
   const noPhotoHtml = () => `<div class="no-photo"><div><svg viewBox="0 0 24 24"><path d="M4 7h3l1.5-2h7L17 7h3v12H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span>Фото буде додано</span></div></div>`;
 
+  function locationLabel(p){
+    return [String(p.city||cfg.DEFAULT_CITY||'').trim(),String(p.address||cfg.DEFAULT_ADDRESS||'').trim()].filter(Boolean).join(', ');
+  }
+  function renderLocations(){
+    const locations=[...new Set(products.map(locationLabel).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'uk'));
+    if(activeLocation&&!locations.includes(activeLocation)) activeLocation='';
+    els.location.innerHTML='<option value="">Усі локації</option>'+locations.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
+    els.location.value=activeLocation;
+  }
   function normalizeProduct(p){
-    return {...p, quantity:Number(p.quantity||0), photos:Array.isArray(p.photos)?p.photos:[], category:p.category||'Інше'};
+    return {...p, city:String(p.city||cfg.DEFAULT_CITY||'').trim(), address:String(p.address||cfg.DEFAULT_ADDRESS||'').trim(), quantity:Number(p.quantity||0), photos:Array.isArray(p.photos)?p.photos:[], category:p.category||'Інше'};
   }
   function apply(){
+    renderLocations();
     const q=norm(els.search.value.trim());
-    filtered=products.map(normalizeProduct).filter(p => (activeCategory==='Усі'||p.category===activeCategory) && (!q || norm(`${p.article} ${p.name} ${p.accountingName||''}`).includes(q)));
+    filtered=products.map(normalizeProduct).filter(p => (activeCategory==='Усі'||p.category===activeCategory) && (!activeLocation||locationLabel(p)===activeLocation) && (!q || norm(`${p.article} ${p.name} ${p.accountingName||''} ${locationLabel(p)}`).includes(q)));
     const s=els.sort.value;
     filtered.sort((a,b)=> s==='article' ? a.article.localeCompare(b.article,'uk') : s==='qtyDesc' ? b.quantity-a.quantity : s==='photos' ? (b.photos.length-a.photos.length)||a.name.localeCompare(b.name,'uk') : a.name.localeCompare(b.name,'uk'));
     render();
   }
   function render(){
     const list=filtered.slice(0,shown);
-    els.grid.innerHTML=list.length ? list.map(cardHtml).join('') : `<div class="empty"><strong>Нічого не знайдено</strong>Спробуйте змінити пошук або категорію.</div>`;
+    els.grid.innerHTML=list.length ? list.map(cardHtml).join('') : `<div class="empty"><strong>Нічого не знайдено</strong>Спробуйте змінити пошук, категорію або локацію.</div>`;
     const srcLabel = remoteLoaded ? ` · дані Google${remoteSource ? ' ('+remoteSource+')' : ''}` : ((cfg.API_URL || cfg.SHEET_ID) ? ' · резервні дані Excel' : ' · дані Excel');
     els.result.textContent=`Знайдено ${filtered.length} позицій` + srcLabel;
     els.more.classList.toggle('hidden',shown>=filtered.length);
@@ -3297,10 +3270,11 @@ window.CATALOG_PRODUCTS = [
   }
   function cardHtml(p,index){
     const photo=p.photos?.[0];
-    const media=photo?imgTag(photo,'',p.name,IS_MOBILE || index<4,p.article):noPhotoHtml();
+    const media=photo?imgTag(photo,'',p.name,IS_MOBILE || index<4):noPhotoHtml();
     return `<article class="card" data-article="${esc(p.article)}">
       <div class="card-media" data-open="${esc(p.article)}">${media}${p.photos?.length>1?`<span class="photo-count">${p.photos.length} фото</span>`:''}</div>
       <div class="card-body"><span class="badge">${esc(p.category||'Інше')}</span><h3>${esc(p.name)}</h3>
+      <div class="location-pill"><span class="location-pin" aria-hidden="true">📍</span><span>${esc(locationLabel(p))}</span></div>
       <div class="meta"><div><span>Артикул</span><strong>${esc(p.article)}</strong></div><div><span>Кількість</span><strong>${esc(p.quantity)} шт.</strong></div></div>
       <div class="card-actions"><button class="details" data-open="${esc(p.article)}">Детальніше</button>${adminKey?`<button class="edit-mini" data-edit="${esc(p.article)}" title="Редагувати">✎</button>`:''}</div></div></article>`;
   }
@@ -3332,6 +3306,7 @@ window.CATALOG_PRODUCTS = [
     selected=find(article); if(!selected)return;
     $('#detailCategory').textContent=selected.category||'Інше'; $('#detailName').textContent=selected.name;
     $('#detailArticle').textContent=selected.article; $('#detailQuantity').textContent=`${selected.quantity} шт.`; $('#detailPhotoCount').textContent=selected.photos?.length||0;
+    $('#detailLocation').textContent=locationLabel(selected);
     renderGallery(selected,0);
     const link=selected.photos?.[0] ? driveViewUrl(selected.photos[0]) : '';
     $('#detailDrive').classList.toggle('hidden',!link); if(link) $('#detailDrive').href=link;
@@ -3341,8 +3316,8 @@ window.CATALOG_PRODUCTS = [
   function renderGallery(p,index){
     const photos=p.photos||[]; const main=$('#galleryMain'), thumbs=$('#galleryThumbs');
     if(!photos.length){main.innerHTML=noPhotoHtml();thumbs.innerHTML='';return;}
-    const photo=photos[Math.min(index,photos.length-1)]; main.innerHTML=imgTag(photo,'',p.name,true,p.article);
-    thumbs.innerHTML=photos.map((x,i)=>`<button class="gallery-thumb ${i===index?'active':''}" data-i="${i}">${imgTag(x,'',`${p.name} фото ${i+1}`,true,p.article)}</button>`).join('');
+    const photo=photos[Math.min(index,photos.length-1)]; main.innerHTML=imgTag(photo,'',p.name,true);
+    thumbs.innerHTML=photos.map((x,i)=>`<button class="gallery-thumb ${i===index?'active':''}" data-i="${i}">${imgTag(x,'',`${p.name} фото ${i+1}`,true)}</button>`).join('');
     thumbs.querySelectorAll('button').forEach(b=>b.onclick=()=>renderGallery(p,Number(b.dataset.i)));
     const l=driveViewUrl(photo); if(l){$('#detailDrive').href=l;$('#detailDrive').classList.remove('hidden')}
   }
@@ -3394,7 +3369,8 @@ window.CATALOG_PRODUCTS = [
         quantity:Number(cell(row,3)||0),
         category:String(cell(row,4)||'Інше'),
         photos,
-        updatedAt:String(cell(row,6)||'')
+        updatedAt:String(cell(row,6)||''),
+        city:String(cell(row,7)||''), address:String(cell(row,8)||'')
       });
     }).filter(p=>p.article);
   }
@@ -3481,12 +3457,13 @@ window.CATALOG_PRODUCTS = [
     $('#editorTitle').textContent=p?'Редагувати позицію':'Додати позицію';
     $('#fArticle').value=p?.article||''; $('#fArticle').readOnly=!!p;
     $('#fQuantity').value=p?.quantity??1; $('#fName').value=p?.name||''; $('#fAccountingName').value=p?.accountingName||''; $('#fCategory').value=p?.category||'Інше';
+    $('#fCity').value=p?.city||cfg.DEFAULT_CITY||''; $('#fAddress').value=p?.address||cfg.DEFAULT_ADDRESS||'';
     $('#fDriveUrls').value='';$('#fFiles').value='';$('#fCamera').value='';clearPendingFiles();$('#editorMsg').textContent='';
     $('#dangerZone').classList.toggle('hidden',!p); $('#apiStatus').textContent=cfg.API_URL?'Google API підключено':'API не налаштовано';$('#apiStatus').classList.toggle('ok',!!cfg.API_URL);
     renderExistingPhotos();els.editor.showModal();
   }
   function renderExistingPhotos(){
-    $('#existingPhotos').innerHTML=editorPhotos.length?`<div class="span2" style="width:100%;font-size:13px;font-weight:800">Поточні фото</div>`+editorPhotos.map((p,i)=>`<div class="existing-photo ${p.keep===false?'marked-delete':''}">${imgTag(p,'',`Фото ${i+1}`,false,selected?.article||$('#fArticle').value.trim())}<button type="button" class="photo-remove ${p.keep===false?'undo':''}" data-photo-remove="${i}">${p.keep===false?'↩ Скасувати':'🗑 Видалити фото'}</button></div>`).join(''):'';
+    $('#existingPhotos').innerHTML=editorPhotos.length?`<div class="span2" style="width:100%;font-size:13px;font-weight:800">Поточні фото</div>`+editorPhotos.map((p,i)=>`<div class="existing-photo ${p.keep===false?'marked-delete':''}">${imgTag(p,'',`Фото ${i+1}`)}<button type="button" class="photo-remove ${p.keep===false?'undo':''}" data-photo-remove="${i}">${p.keep===false?'↩ Скасувати':'🗑 Видалити фото'}</button></div>`).join(''):'';
     $$('[data-photo-remove]').forEach(x=>x.onclick=()=>{const i=Number(x.dataset.photoRemove);editorPhotos[i].keep=editorPhotos[i].keep===false;renderExistingPhotos();});
   }
 
@@ -3563,31 +3540,6 @@ window.CATALOG_PRODUCTS = [
   }
   const loadImage=src=>new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error('Не вдалося декодувати фото'));i.src=src});
 
-  function dataUrlToBlob(dataUrl){
-    const m=String(dataUrl||'').match(/^data:([^;]+);base64,(.+)$/);
-    if(!m) throw new Error('Некоректні дані фото');
-    const bytes=atob(m[2]), arr=new Uint8Array(bytes.length);
-    for(let i=0;i<bytes.length;i++) arr[i]=bytes.charCodeAt(i);
-    return new Blob([arr],{type:m[1]||'image/jpeg'});
-  }
-
-  async function uploadPhotosToServer(article, uploads){
-    const endpoint=String(cfg.SERVER_UPLOAD_URL||'').trim();
-    if(!endpoint) throw new Error('SERVER_UPLOAD_URL не налаштований');
-    const fd=new FormData();
-    fd.append('key',adminKey);
-    fd.append('article',article);
-    uploads.forEach((u,i)=>{
-      const blob=dataUrlToBlob(u.dataUrl);
-      fd.append('photos[]',blob,u.name||`photo_${i+1}.jpg`);
-    });
-    const r=await fetch(endpoint,{method:'POST',body:fd,cache:'no-store',credentials:'same-origin'});
-    let j=null;
-    try{j=await r.json();}catch{}
-    if(!r.ok || !j?.ok) throw new Error(j?.error||`Помилка сервера фото (${r.status})`);
-    return Array.isArray(j.photos)?j.photos:[];
-  }
-
   $('#editorForm').onsubmit=async e=>{
     e.preventDefault(); const msg=$('#editorMsg'); msg.className='form-msg';
     if(!cfg.API_URL){msg.textContent='У window.APP_CONFIG всередині index.html потрібно вказати URL Google Apps Script.';msg.classList.add('error');return}
@@ -3601,25 +3553,15 @@ window.CATALOG_PRODUCTS = [
       const keepPhotos=editorPhotos.filter(x=>x.keep!==false).map(({keep,...p})=>p);
       const removePhotoKeys=editorPhotos.filter(x=>x.keep===false).map(photoKey).filter(Boolean);
       const quantity=Number($('#fQuantity').value||0), category=$('#fCategory').value.trim()||'Інше', accountingName=$('#fAccountingName').value.trim();
-
-      const uploadProvider=String(cfg.UPLOAD_PROVIDER||'google-drive').toLowerCase();
-      let driveUploads=uploads, serverPhotos=[];
-      if(uploadProvider==='server' && uploads.length){
-        msg.textContent='Завантажую фото на сервер…';
-        serverPhotos=await uploadPhotosToServer(article,uploads);
-        driveUploads=[];
-      }
-
-      const payload={action:'upsert',key:adminKey,product:{article,name,accountingName,quantity,category,keepPhotos,removePhotoKeys,externalPhotoUrls,uploads:driveUploads,serverPhotos}};
-      msg.textContent='Надсилаю зміни в базу…';submitApi(payload);
-      // На мобільному не тримаємо модальне вікно відкритим, поки API обробляє дані.
-      els.editor.close(); clearPendingFiles();
-      const photoTarget=uploadProvider==='server'?'сервер':'Google Drive';
-      showToast(uploads.length?`Фото завантажується: ${photoTarget}…`:'Зберігаю зміни…');
+      const city=$('#fCity').value.trim(), address=$('#fAddress').value.trim();
+      const payload={action:'upsert',key:adminKey,product:{article,name,accountingName,quantity,category,city,address,keepPhotos,removePhotoKeys,externalPhotoUrls,uploads}};
+      msg.textContent='Надсилаю зміни в Google…';submitApi(payload);
+      // На мобільному не тримаємо модальне вікно відкритим, поки Apps Script обробляє фото.
+      els.editor.close(); clearPendingFiles(); showToast(uploads.length?'Фото завантажується у Google Drive…':'Зберігаю зміни…');
       const p=await waitForRemote(article,x=>{
         if(!x) return false;
         const changed = !beforeUpdatedAt || (x.updatedAt && x.updatedAt!==beforeUpdatedAt);
-        return changed && x.name===name && Number(x.quantity||0)===quantity && (x.category||'Інше')===category;
+        return changed && x.name===name && Number(x.quantity||0)===quantity && (x.category||'Інше')===category && x.city===(city||cfg.DEFAULT_CITY) && x.address===(address||cfg.DEFAULT_ADDRESS);
       },18);
       if(p){showToast('Збережено. Каталог оновлено.','success');}
       else{showToast('Зміни відправлено, але підтвердження від Google затримується. Оновіть каталог через кілька секунд.','error');}
@@ -3654,6 +3596,7 @@ window.CATALOG_PRODUCTS = [
   };
 
   $$('.modal-close,[data-close]').forEach(b=>b.addEventListener('click',()=>{const d=document.getElementById(b.dataset.close)||b.closest('dialog');if(d?.open)d.close()}));
+  els.location.onchange=()=>{activeLocation=els.location.value;shown=PAGE_SIZE;apply()};
   els.search.addEventListener('input',()=>{shown=PAGE_SIZE;apply()}); $('#searchBtn').onclick=()=>apply(); els.sort.onchange=()=>apply(); els.more.onclick=()=>{shown+=PAGE_SIZE;render()};
   if(adminKey) setAdmin(true);
   loadRemote();
